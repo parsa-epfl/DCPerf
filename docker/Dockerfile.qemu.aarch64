@@ -1,0 +1,7 @@
+FROM ghcr.io/parsa-epfl/dcperf/dcperf-base:latest
+
+ENV DEBIAN_FRONTEND=noninteractive
+
+# Install dependencies quietly
+RUN apt-get update -qq && \
+    apt-get install -y -qq qemu qemu-system-aarch64 qemu-utils qemu-efi-aarch64 cloud-image-utils xz-utils 

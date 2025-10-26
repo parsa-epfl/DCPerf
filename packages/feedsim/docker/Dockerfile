@@ -1,5 +1,5 @@
 # Start from the dcperf base image
-FROM ghcr.io/parsa-epfl/dcperf/dcperf-base:v0.1
+FROM ghcr.io/parsa-epfl/dcperf/dcperf-base:latest
 
 # Update package lists
 RUN apt-get update

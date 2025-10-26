@@ -1,4 +1,4 @@
-FROM akrishnaams/ubuntu2204:oh-my-bash
+FROM akrishnaams/ubuntu2204:latest
 # FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive

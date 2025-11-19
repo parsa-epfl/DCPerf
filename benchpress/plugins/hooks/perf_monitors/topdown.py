@@ -524,11 +524,15 @@ if cpu_vendor == "intel":
 elif cpu_vendor == "amd":
     TopDown = AMDPerfUtil
 elif cpu_vendor == "arm":
-    vendor2 = get_cpu_vendor_from_dmi()
-    if vendor2 == "nvidia":
-        TopDown = NVPerfUtil
-    else:
-        TopDown = ARMPerfUtil
+    TopDown = ARMPerfUtil
+    #Following lines have been commented to enable docker containerization. 
+    #Else docker images cannot be created because dmidecode is not accessible in build process
+    #By Default ARMPerfUtil will be used. Please change it when you are using Nvidia CPUs
+    #vendor2 = get_cpu_vendor_from_dmi()
+    #if vendor2 == "nvidia":
+    #    TopDown = NVPerfUtil
+    #else:
+    #    TopDown = ARMPerfUtil
 else:
     logger.warning(f"Unsupported CPU vendor '{cpu_vendor}'")
     TopDown = DummyPerfUtil

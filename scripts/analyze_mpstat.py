@@ -14,15 +14,42 @@ from reportlab.lib.styles import getSampleStyleSheet
 # Parse mpstat.log format
 # ---------------------------
 def parse_mpstat_log(filename):
-    pattern = re.compile(
-        r"(\d{2}:\d{2}:\d{2})\s+all\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+"
+
+    # Pattern for 12-hour timestamps with AM/PM
+    pattern_12 = re.compile(
+        r"(\d{2}:\d{2}:\d{2}\s+[AP]M)\s+all\s+"
+        r"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+"
         r"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)"
     )
+
+    # Pattern for 24-hour timestamps
+    pattern_24 = re.compile(
+        r"(\d{2}:\d{2}:\d{2})\s+all\s+"
+        r"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+"
+        r"([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)\s+([\d.]+)"
+    )
+
+    # Determine format by scanning first valid timestamp
+    chosen_pattern = None
+    timestamp_format = None
+
+    with open(filename, "r") as f:
+        for line in f:
+            if pattern_12.search(line):
+                chosen_pattern = pattern_12
+                timestamp_format = "%I:%M:%S %p"
+                break
+            if pattern_24.search(line):
+                chosen_pattern = pattern_24
+                timestamp_format = "%H:%M:%S"
+                break
+        if chosen_pattern is None:
+            raise ValueError("No valid mpstat timestamp found in file.")
 
     records = []
     with open(filename, "r") as f:
         for line in f:
-            m = pattern.search(line)
+            m = chosen_pattern.search(line)
             if m:
                 timestamp = m.group(1)
                 values = list(map(float, m.groups()[1:]))
@@ -34,12 +61,13 @@ def parse_mpstat_log(filename):
     ]
 
     df = pd.DataFrame(records, columns=columns)
-    df["timestamp"] = pd.to_datetime(df["timestamp"], format="%H:%M:%S")
+    df["timestamp"] = pd.to_datetime(df["timestamp"], format=timestamp_format)
 
     # ✅ Compute elapsed seconds since first sample
     df["elapsed_s"] = (df["timestamp"] - df["timestamp"].iloc[0]).dt.total_seconds()
 
     return df
+
 
 
 # ---------------------------

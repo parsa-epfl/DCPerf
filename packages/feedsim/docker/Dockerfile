@@ -6,6 +6,7 @@ RUN apt-get update
 
 # Set working directory
 WORKDIR /DCPerf
+RUN git checkout feedsim
 
 # Run the install command for feedsim_autoscale
 RUN ./benchpress_cli.py install feedsim_autoscale

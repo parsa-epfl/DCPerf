@@ -102,7 +102,7 @@ for i in $(seq 1 ${NUM_INSTANCES}); do
     CMD="IS_AUTOSCALE_RUN=${NUM_INSTANCES} taskset --cpu-list ${CORE_RANGE} ${FEEDSIM_ROOT}/run.sh -p ${PORT} -i ${NUM_ICACHE_ITERATIONS} -o feedsim_results_${FIXQPS_SUFFIX}${i}.txt $*"
     echo "$CMD" > "${FEEDSIM_LOG_PREFIX}${i}.log"
     # shellcheck disable=SC2068,SC2069
-    IS_AUTOSCALE_RUN=${NUM_INSTANCES} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "feedsim_results_${FIXQPS_SUFFIX}${i}.txt" $@ 2>&1 > "${FEEDSIM_LOG_PREFIX}${i}.log" &
+    IS_AUTOSCALE_RUN=${NUM_INSTANCES} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "feedsim_results_${FIXQPS_SUFFIX}${i}.txt" "$@" 2>&1 | tee -a "${FEEDSIM_LOG_PREFIX}${i}.log" &
     PIDS+=("$!")
     PHY_CORE_ID=$((PHY_CORE_ID + CORES_PER_INST))
     SMT_ID=$((SMT_ID + CORES_PER_INST))

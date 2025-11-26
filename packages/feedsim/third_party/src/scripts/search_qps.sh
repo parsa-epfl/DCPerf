@@ -325,6 +325,7 @@ if [ "$warmup_time" -gt 0 ]; then
   run_loadtest peak_qps measured_latency
   printf "warmup qps = %.2f, latency = %.2f\n" $peak_qps $measured_latency
   benchreps_tell_state "after warmup"
+  echo "$(date +"%Y-%m-%d_%T") : WARMUP COMPLETED."
   experiment_time="$saved_experiment_time"
 fi
 

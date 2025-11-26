@@ -201,7 +201,8 @@ main() {
         --num_objects=2000 \
         --graph_max_iters=1 \
         --noaffinity \
-        --min_icache_iterations="$icache_iterations" &
+        --min_icache_iterations="$icache_iterations" \
+        > /dev/null 2>&1 &
 
     LEAF_PID=$!
 

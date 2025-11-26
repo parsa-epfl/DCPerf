@@ -51,11 +51,13 @@ class Benchpress:
         override_job_args: typing.Optional[str] = None,
         hook_bg_duration: typing.Optional[str] = None,
         hook_path: typing.Optional[str] = None,
+        print_realtime: bool = False,
     ):
         self.config = config
         self.uuid = uuid
         self.timestamp = timestamp
         self.iteration_num = iteration_num
+        self.print_realtime = print_realtime
 
         # Generate an uuid, timestamp and iteration number if not given
         if uuid is None:
@@ -83,6 +85,7 @@ class Benchpress:
             j["timestamp"] = int(self.timestamp)
             j["iteration_num"] = self.iteration_num
             j["hook_bg_duration"] = self.hook_bg_duration
+            j["print_realtime"] = self.print_realtime
             if self.hook_path is not None:
                 custom_hook = {
                     "hook": "user-script",
@@ -207,6 +210,11 @@ def setup_parser():
         "--override_job_args",
         help="Override job args completely and directly from CLI",
         type=str,
+    )
+    parser.add_argument(
+        "--print-realtime",
+        action="store_true",
+        help="Print benchmark output in real-time instead of summarizing at the end",
     )
 
     subparsers = parser.add_subparsers(dest="command", help="subcommand to run")
@@ -349,5 +357,6 @@ def main(args=sys.argv[1:]):
         args.override_job_args,
         args.hook_bg_duration,
         args.hook_path,
+        args.print_realtime,
     )
     args.command.run(args, bp.jobs)

@@ -26,13 +26,15 @@ logger = logging.getLogger(__name__)
 TRIM_OUTPUT_LINES = 50
 
 
-def output_catcher(reader, writer=None, loglevel=logging.INFO):
+def output_catcher(reader, writer=None, loglevel=logging.INFO, print_to_console=False):
     for line in iter(reader.readline, ""):
         if not line:
             continue
         logger.log(loglevel, line.rstrip(), extra={"raw": True})
         if writer is not None:
             writer.write(line)
+        if print_to_console:
+            click.echo(line.rstrip())
 
 
 class Job:
@@ -89,6 +91,9 @@ class Job:
         # if this option is a string, the output will be written to the file
         # named by this value
         self.tee_output = job_config.get("tee_output", False)
+        # if print_realtime is True, output is printed as it comes instead of
+        # summarized at the end
+        self.print_realtime = job_config.get("print_realtime", False)
 
         self.tags = formalize_tags([benchmark_config, job_config])
 
@@ -228,12 +233,12 @@ class Job:
             stdout_catcher = threading.Thread(
                 target=output_catcher,
                 name="stdout-catcher",
-                args=(process.stdout, stdout_storage, logging.INFO),
+                args=(process.stdout, stdout_storage, logging.INFO, self.print_realtime),
             )
             stderr_catcher = threading.Thread(
                 target=output_catcher,
                 name="stderr-catcher",
-                args=(process.stderr, stderr_storage, logging.INFO),
+                args=(process.stderr, stderr_storage, logging.INFO, self.print_realtime),
             )
 
             stdout_catcher.start()
@@ -258,7 +263,11 @@ class Job:
             if self.stdout:
                 with open(self.stdout, "r") as metrics_file:
                     stdout = metrics_file.read()
-            self._print_output_summary(stdout, stderr)
+            
+            # Only print summary if not printing in real-time
+            if not self.print_realtime:
+                self._print_output_summary(stdout, stderr)
+            
             logger.info(f"stderr output: {stderr}")
             returncode = process.returncode
             if self.check_returncode and returncode != 0:

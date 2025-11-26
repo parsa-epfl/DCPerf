@@ -50,6 +50,12 @@ class RunCommand(BenchpressCommand):
             help="Dry run to check commands to run",
         )
         parser.add_argument(
+            "--print-realtime",
+            action="store_true",
+            default=False,
+            help="Print benchmark output in real-time instead of summarizing at the end",
+        )
+        parser.add_argument(
             "-k",
             "--hooks",
             default=[],
@@ -144,6 +150,9 @@ class RunCommand(BenchpressCommand):
                 job_cmd = job.dry_run(args.role, role_in)
                 click.echo(f"Execution command: {' '.join(job_cmd)}")
                 continue
+
+            # Set print_realtime on the job from command-line argument
+            job.print_realtime = args.print_realtime
 
             try:
                 additional_hook_args = json.loads(args.hook_args)

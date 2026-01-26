@@ -23,12 +23,16 @@
 #include "oldisim/LogHistogramSampler.h"
 #include "oldisim/QueryContext.h"
 #include "oldisim/Response.h"
+#include "oldisim/Util.h"
 
 namespace oldisim {
 
 class LeafNodeStats {
  public:
-  explicit LeafNodeStats(const std::set<uint32_t>& query_types) {
+  explicit LeafNodeStats(const std::set<uint32_t>& query_types) 
+      : start_time_(GetTimeAccurateNano()),
+        elapsed_time_(0) 
+  {
     const int kHistogramBins = 2000;
     for (auto type : query_types) {
       tx_bytes_[type] = 0;
@@ -45,6 +49,8 @@ class LeafNodeStats {
   std::map<uint32_t, uint64_t> query_counts_;
   std::map<uint32_t, uint64_t> response_counts_;
   std::map<uint32_t, LogHistogramSampler> processing_time_samplers_;
+  uint64_t start_time_;
+  uint64_t elapsed_time_;
 
   void LogQuery(const QueryContext& query) {
     assert(rx_bytes_.count(query.type) > 0);
@@ -89,6 +95,13 @@ class LeafNodeStats {
     for (const auto& sampler : cs.processing_time_samplers_) {
       processing_time_samplers_.at(sampler.first).accumulate(sampler.second);
     }
+
+    elapsed_time_ += cs.elapsed_time_;
+  }
+
+  void LogElapsedTime() {
+    uint64_t now = GetTimeAccurateNano();
+    elapsed_time_ = now - start_time_;
   }
 
   void Reset() {
@@ -99,6 +112,8 @@ class LeafNodeStats {
       response_counts_[stat.first] = 0;
       processing_time_samplers_.at(stat.first).Reset();
     }
+    start_time_ = GetTimeAccurateNano();
+    elapsed_time_ = 0;
   }
 };
 }  // namespace oldisim

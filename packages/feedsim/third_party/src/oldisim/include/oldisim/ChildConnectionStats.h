@@ -45,6 +45,7 @@ class ChildConnectionStats {
       dropped_requests_[type] = 0;
     }
     start_time_ = GetTimeAccurateNano();
+    elapsed_time_ = 0;
   }
 
   uint64_t start_time_;
@@ -55,6 +56,7 @@ class ChildConnectionStats {
   std::map<uint32_t, uint64_t> rx_bytes_;
   std::map<uint32_t, uint64_t> query_counts_;
   std::map<uint32_t, uint64_t> dropped_requests_;
+  uint64_t elapsed_time_;
 
   void LogRequest(const Query& request) {
     assert(tx_bytes_.count(request.GetType()) > 0);
@@ -115,6 +117,13 @@ class ChildConnectionStats {
     for (const auto& stat : cs.dropped_requests_) {
       dropped_requests_[stat.first] += stat.second;
     }
+
+    elapsed_time_ += cs.elapsed_time_;
+  }
+
+  void LogElapsedTime() {
+    end_time_ = GetTimeAccurateNano();
+    elapsed_time_ = end_time_ - start_time_;
   }
 
   void Reset() {
@@ -127,6 +136,7 @@ class ChildConnectionStats {
       dropped_requests_[stat.first] = 0;
     }
     start_time_ = GetTimeAccurateNano();
+    elapsed_time_ = 0;
   }
 };
 }  // namespace oldisim

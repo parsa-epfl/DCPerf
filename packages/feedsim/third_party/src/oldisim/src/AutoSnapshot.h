@@ -52,9 +52,9 @@ class AutoSnapshot {
 
   T PopSnapshot() {
     std::lock_guard<std::mutex> lock(snapshots_lock_);
-    T front = snapshots_.front();
-    snapshots_.pop_front();
-    return front;
+    T latest_snapshot = snapshots_.back();
+    snapshots_.pop_back();
+    return latest_snapshot;
   }
 
   static void SnapshotTimerHandler(evutil_socket_t listener, int16_t flags,

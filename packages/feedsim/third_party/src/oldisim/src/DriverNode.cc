@@ -13,6 +13,10 @@
 // See the License for the specific language governing permissions and
 // limitations under the License.
 
+// TODO: DriverNode QPS calculation does not use elapsed_time_ seen by Snapshots directly.
+// This can lead to small inaccuracies in QPS calculation if there is significant jitter
+// in snapshot intervals. Fix this while calculating QPS
+
 #include "oldisim/DriverNode.h"
 
 #include <arpa/inet.h>
@@ -64,7 +68,7 @@
 
 namespace oldisim {
 
-static const int kStatsWindowSeconds = 1;
+static const int kStatsWindowSeconds = 5;
 static const int kStatsMaxWindows = 3600;  // 1 hour
 
 struct DriverNode::DriverNodeThread {
@@ -294,7 +298,7 @@ void DriverNode::DriverNodeImpl::MonitoringChildStatsHandler(
         int window_time_secs = window_num * kStatsWindowSeconds;
         stats_output.insert(std::make_pair(
             window_time_secs, ConnectionUtil::MakeChildConnectionStatsMap(
-                                  stats, window_time_secs)));
+                                  stats, window_time_secs, driver->impl_->threads.size())));
         window_sizes_index++;
       }
     } while (window_num < kStatsMaxWindows &&
@@ -398,7 +402,8 @@ void DriverNode::DriverNodeThread::PostSnapshotCallback() {
   // Copy current to last
   test_driver->impl_->last_child_stats =
       test_driver->impl_->current_child_stats;
-  test_driver->impl_->last_child_stats.end_time_ = GetTimeAccurateNano();
+  // test_driver->impl_->last_child_stats.end_time_ = GetTimeAccurateNano();
+  test_driver->impl_->current_child_stats.LogElapsedTime();
   // Reset stats
   test_driver->impl_->current_child_stats.Reset();
 }
@@ -559,9 +564,12 @@ void DriverNode::Run(uint32_t num_threads, bool thread_pinning,
 
   // Aggregate remaining samples from each child thread
   for (const auto& thread : impl_->threads) {
+    thread->test_driver->impl_->current_child_stats.LogElapsedTime();
     impl_->total_child_stats->Accumulate(
         thread->test_driver->impl_->current_child_stats);
   }
+
+  double elapsed_time_seconds = (impl_->total_child_stats->elapsed_time_ / 1000000000.0) / impl_->threads.size();
 
   // Print stats
   for (uint32_t type : impl_->request_types) {

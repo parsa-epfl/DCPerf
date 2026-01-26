@@ -66,8 +66,8 @@ class ConnectionUtil {
 
   static std::map<uint32_t, std::map<std::string, double>>
   MakeChildConnectionStatsMap(const ChildConnectionStats& stats,
-                              double elapsed_time);
+                              double elapsed_time, uint32_t num_threads);
   static std::map<uint32_t, std::map<std::string, double>> MakeLeafNodeStatsMap(
-      const LeafNodeStats& stats, double elapsed_time);
+      const LeafNodeStats& stats, double elapsed_time, uint32_t num_threads);
 };
 }  // namespace oldisim

@@ -106,9 +106,14 @@ std::unique_ptr<ChildConnection> ConnectionUtil::MakeChildConnection(
 
 std::map<uint32_t, std::map<std::string, double>>
 ConnectionUtil::MakeChildConnectionStatsMap(const ChildConnectionStats& stats,
-                                            double elapsed_time) {
+                                            double elapsed_time, uint32_t num_threads) {
   // Return QPS, RX BW, TX BW, mean, 50%, 90%, 95%, 99% latencies
   std::map<uint32_t, std::map<std::string, double>> results;
+  
+  // Use elapsed_time from stats (convert from nanoseconds to seconds)
+  // stats.elapsed_time_ is accumulated across all threads, so divide by num_threads to get actual wall-clock time
+  double elapsed_time_seconds = (double)(stats.elapsed_time_ / 1000000000.0) / num_threads;
+
   // Create stats for each query type
   for (const auto& sampler_pair : stats.query_samplers_) {
     uint32_t type = sampler_pair.first;
@@ -140,16 +145,21 @@ ConnectionUtil::MakeChildConnectionStatsMap(const ChildConnectionStats& stats,
 
 std::map<uint32_t, std::map<std::string, double>>
 ConnectionUtil::MakeLeafNodeStatsMap(const LeafNodeStats& stats,
-                                     double elapsed_time) {
+                                     double elapsed_time, uint32_t num_threads) {
   // Return QPS, RX BW, TX BW, mean, 50%, 90%, 95%, 99% latencies
   std::map<uint32_t, std::map<std::string, double>> results;
+
+  // Use elapsed_time from stats (convert from nanoseconds to seconds)
+  // stats.elapsed_time_ is accumulated across all threads, so divide by num_threads to get actual wall-clock time
+  double elapsed_time_seconds = (double)(stats.elapsed_time_ / 1000000000.0) / num_threads;
+  
   // Create stats for each query type
   for (const auto& sampler_pair : stats.processing_time_samplers_) {
     uint32_t type = sampler_pair.first;
     auto& sampler = sampler_pair.second;
-    double qps = stats.query_counts_.at(type) / elapsed_time;
-    double rx_mbps = stats.rx_bytes_.at(type) / elapsed_time / 1024 / 1024;
-    double tx_mbps = stats.tx_bytes_.at(type) / elapsed_time / 1024 / 1024;
+    double qps = stats.query_counts_.at(type) / elapsed_time_seconds;
+    double rx_mbps = stats.rx_bytes_.at(type) / elapsed_time_seconds / 1024 / 1024;
+    double tx_mbps = stats.tx_bytes_.at(type) / elapsed_time_seconds / 1024 / 1024;
     double latency_mean =
         stats.processing_time_samplers_.at(type).average();
     double latency_50p =

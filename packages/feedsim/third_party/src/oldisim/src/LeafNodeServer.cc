@@ -70,7 +70,7 @@ struct RequestTask {
   QueryContext* request;
 };
 
-static const int kStatsWindowSeconds = 1;
+static const int kStatsWindowSeconds = 5;
 static const int kStatsMaxWindows = 3600;  // 1 hour
 const int kRequestQueueSize = 10000;
 
@@ -347,7 +347,7 @@ void LeafNodeServer::LeafNodeServerImpl::MonitoringChildStatsHandler(
         int window_time_secs = window_num * kStatsWindowSeconds;
         stats_output.insert(std::make_pair(
             window_time_secs,
-            ConnectionUtil::MakeLeafNodeStatsMap(stats, window_time_secs)));
+            ConnectionUtil::MakeLeafNodeStatsMap(stats, window_time_secs, server->impl_->num_threads)));
         window_sizes_index++;
       }
     } while (window_num < kStatsMaxWindows &&
@@ -597,6 +597,7 @@ void LeafNodeServer::LeafNodeServerThread::LogResponse(
 }
 
 LeafNodeStats LeafNodeServer::LeafNodeServerThread::GetStatsSnapshotCallback() {
+  this_node_stats->LogElapsedTime();
   return *this_node_stats;
 }
 

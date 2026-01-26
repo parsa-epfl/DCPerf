@@ -358,11 +358,11 @@ void ParentNodeServer::ParentNodeServerImpl::MonitoringChildStatsHandler(
               [window_time_secs][server->impl_
                                      ->child_node_addr_string[node_num]] =
                   ConnectionUtil::MakeChildConnectionStatsMap(
-                      per_node_stats[node_num], window_time_secs);
+                      per_node_stats[node_num], window_time_secs, server->impl_->threads.size());
         }
         global_stats_output[window_time_secs] =
             ConnectionUtil::MakeChildConnectionStatsMap(global_stats,
-                                                        window_time_secs);
+                                                        window_time_secs, server->impl_->threads.size());
         window_sizes_index++;
       }
     } while (window_num < kStatsMaxWindows &&

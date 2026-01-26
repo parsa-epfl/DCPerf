@@ -116,11 +116,11 @@ ConnectionUtil::MakeChildConnectionStatsMap(const ChildConnectionStats& stats,
     double qps = stats.query_counts_.at(type) / elapsed_time;
     double rx_mbps = stats.rx_bytes_.at(type) / elapsed_time / 1024 / 1024;
     double tx_mbps = stats.tx_bytes_.at(type) / elapsed_time / 1024 / 1024;
-    double latency_mean = stats.query_samplers_.at(type).average() / 1000000;
-    double latency_50p = stats.query_samplers_.at(type).get_nth(50) / 1000000;
-    double latency_90p = stats.query_samplers_.at(type).get_nth(90) / 1000000;
-    double latency_95p = stats.query_samplers_.at(type).get_nth(95) / 1000000;
-    double latency_99p = stats.query_samplers_.at(type).get_nth(99) / 1000000;
+    double latency_mean = stats.query_samplers_.at(type).average();
+    double latency_50p = stats.query_samplers_.at(type).get_nth(50);
+    double latency_90p = stats.query_samplers_.at(type).get_nth(90);
+    double latency_95p = stats.query_samplers_.at(type).get_nth(95);
+    double latency_99p = stats.query_samplers_.at(type).get_nth(99);
     double dropped_requests = stats.dropped_requests_.at(type) / elapsed_time;
     results.insert(
         std::make_pair(type, std::map<std::string, double>(
@@ -151,15 +151,15 @@ ConnectionUtil::MakeLeafNodeStatsMap(const LeafNodeStats& stats,
     double rx_mbps = stats.rx_bytes_.at(type) / elapsed_time / 1024 / 1024;
     double tx_mbps = stats.tx_bytes_.at(type) / elapsed_time / 1024 / 1024;
     double latency_mean =
-        stats.processing_time_samplers_.at(type).average() / 1000000;
+        stats.processing_time_samplers_.at(type).average();
     double latency_50p =
-        stats.processing_time_samplers_.at(type).get_nth(50) / 1000000;
+        stats.processing_time_samplers_.at(type).get_nth(50);
     double latency_90p =
-        stats.processing_time_samplers_.at(type).get_nth(90) / 1000000;
+        stats.processing_time_samplers_.at(type).get_nth(90);
     double latency_95p =
-        stats.processing_time_samplers_.at(type).get_nth(95) / 1000000;
+        stats.processing_time_samplers_.at(type).get_nth(95);
     double latency_99p =
-        stats.processing_time_samplers_.at(type).get_nth(99) / 1000000;
+        stats.processing_time_samplers_.at(type).get_nth(99);
     results.insert(std::make_pair(
         type, std::map<std::string, double>({{"qps", qps},
                                              {"rx_mbps", rx_mbps},

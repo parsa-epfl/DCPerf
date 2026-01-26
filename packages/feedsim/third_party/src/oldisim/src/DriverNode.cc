@@ -579,25 +579,20 @@ void DriverNode::Run(uint32_t num_threads, bool thread_pinning,
            impl_->total_child_stats->query_counts_[type]);
     printf(
         "  min: %.3f ms\n",
-        impl_->total_child_stats->query_samplers_.at(type).minimum() / 1000000);
+        impl_->total_child_stats->query_samplers_.at(type).minimum());
     printf(
         "  avg: %.3f ms\n",
-        impl_->total_child_stats->query_samplers_.at(type).average() / 1000000);
+        impl_->total_child_stats->query_samplers_.at(type).average());
     printf("  50p: %.3f ms\n",
-           impl_->total_child_stats->query_samplers_.at(type).get_nth(50) /
-               1000000);
+           impl_->total_child_stats->query_samplers_.at(type).get_nth(50));
     printf("  90p: %.3f ms\n",
-           impl_->total_child_stats->query_samplers_.at(type).get_nth(90) /
-               1000000);
+           impl_->total_child_stats->query_samplers_.at(type).get_nth(90));
     printf("  95p: %.3f ms\n",
-           impl_->total_child_stats->query_samplers_.at(type).get_nth(95) /
-               1000000);
+           impl_->total_child_stats->query_samplers_.at(type).get_nth(95));
     printf("  99p: %.3f ms\n",
-           impl_->total_child_stats->query_samplers_.at(type).get_nth(99) /
-               1000000);
+           impl_->total_child_stats->query_samplers_.at(type).get_nth(99));
     printf("  99.9p: %.3f ms\n",
-           impl_->total_child_stats->query_samplers_.at(type).get_nth(99.9) /
-               1000000);
+           impl_->total_child_stats->query_samplers_.at(type).get_nth(99.9));
   }
 }
 

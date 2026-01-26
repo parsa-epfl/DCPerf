@@ -31,7 +31,7 @@ namespace oldisim {
 class ChildConnectionStats {
  public:
   explicit ChildConnectionStats(const std::set<uint32_t>& query_types) {
-    const int kHistogramBins = 1000;
+    const int kHistogramBins = 2000;
     for (auto type : query_types) {
       // query_samplers_.emplace(type, std::unique_ptr<LogHistogramSampler>(new
       // LogHistogramSampler(kHistogramBins)));
@@ -71,9 +71,9 @@ class ChildConnectionStats {
     assert(tx_bytes_.count(response.GetType()) > 0);
 
     query_samplers_.at(originating_request.GetType())
-        .sample(originating_request.Time());
+        .sample(originating_request.Time() / 1000000.0);
     query_processing_time_samplers_.at(originating_request.GetType())
-        .sample(response.GetProcessingTime());
+        .sample(response.GetProcessingTime() / 1000000.0);
     rx_bytes_.at(response.GetType()) += response.GetResponsePacketSize();
   }
 

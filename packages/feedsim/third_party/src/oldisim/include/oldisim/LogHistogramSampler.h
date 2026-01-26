@@ -23,7 +23,7 @@
 #include <memory>
 #include <vector>
 
-#define _POW 1.1
+#define _POW 1.005
 
 namespace oldisim {
 

@@ -29,7 +29,7 @@ namespace oldisim {
 class LeafNodeStats {
  public:
   explicit LeafNodeStats(const std::set<uint32_t>& query_types) {
-    const int kHistogramBins = 200;
+    const int kHistogramBins = 2000;
     for (auto type : query_types) {
       tx_bytes_[type] = 0;
       rx_bytes_[type] = 0;
@@ -60,7 +60,7 @@ class LeafNodeStats {
     tx_bytes_.at(response.GetType()) += response.GetResponsePacketSize();
     response_counts_.at(response.GetType())++;
     processing_time_samplers_.at(response.GetType())
-        .sample(response.GetProcessingTime());
+        .sample(response.GetProcessingTime() / 1000000.0);
   }
 
   void Accumulate(const LeafNodeStats& cs) {

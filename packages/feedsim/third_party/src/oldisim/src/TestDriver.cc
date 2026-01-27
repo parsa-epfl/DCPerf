@@ -41,7 +41,9 @@ void TestDriver::SendRequest(uint32_t type, const void* payload,
   int index = impl_->GetNextConnectionIndex();
   int conn_id = impl_->connections[index].first;
   auto& conn = *impl_->connections[index].second;
-  conn.IssueRequest(type, impl_->next_request_id++, payload, payload_length);
+  // Generate globally unique request_id: thread_id * 1 trillion + local_id
+  uint64_t global_request_id = impl_->thread_id * 1000000000000ULL + impl_->next_request_id++;
+  conn.IssueRequest(type, global_request_id, payload, payload_length);
 
   // Check to see if this connection is filled to max depth
   if (conn.GetNumOutstandingRequests() == impl_->max_connection_depth) {
@@ -75,11 +77,13 @@ TestDriver::TestDriverImpl::TestDriverImpl(
         _on_reply_cbs,
     const std::set<uint32_t>& request_types,
     const DriverNodeMakeRequestCallback& _make_request_cb,
-    NodeThread& _node_thread)
+    NodeThread& _node_thread,
+    uint64_t _thread_id)
     : owner(_owner),
       max_connection_depth(_max_connection_depth),
       on_reply_cbs(_on_reply_cbs),
       make_request_cb(_make_request_cb),
+      thread_id(_thread_id),
       next_request_id(0),
       node_thread(_node_thread),
       current_child_stats(request_types),

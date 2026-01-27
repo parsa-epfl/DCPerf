@@ -60,4 +60,41 @@ void ParentConnection::SendResponse(
     logger(response);
   }
 }
+
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+void ParentConnection::SendResponse(
+    uint32_t response_type, uint64_t query_id, uint64_t start_time,
+    uint64_t processing_time, const void* data, uint32_t data_length,
+    std::function<void(const Response&)> logger,
+    uint64_t total_handler_duration,
+    uint64_t pagerank_duration,
+    uint64_t sleep_io_duration,
+    uint64_t compression_duration,
+    uint64_t pointer_chase_duration,
+    uint64_t response_generation_duration) {
+  Response response(response_type, query_id, start_time, processing_time,
+                    data_length, total_handler_duration, pagerank_duration,
+                    sleep_io_duration, compression_duration,
+                    pointer_chase_duration, response_generation_duration);
+
+  // Send it over the wire
+  {
+    std::unique_lock<std::mutex> lock;
+    // Grab the lock if locking is enabled to avoid split responses
+    if (impl_->use_locking) {
+      lock = std::unique_lock<std::mutex>(impl_->sending_lock);
+    }
+    ResponsePacketHeader header = std::move(response.GetHeaderNetworkOrder());
+    bufferevent_write(impl_->bev, &header, sizeof(header));
+    if (data_length > 0) {
+      bufferevent_write(impl_->bev, data, data_length);
+    }
+  }
+
+  // Update stats
+  if (logger != nullptr) {
+    logger(response);
+  }
+}
+#endif
 }  // namespace oldisim

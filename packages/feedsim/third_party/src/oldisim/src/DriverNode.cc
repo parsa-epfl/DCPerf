@@ -349,7 +349,7 @@ void DriverNode::DriverNodeThread::Init() {
       driver_node.impl_->num_connections_per_thread,
       driver_node.impl_->max_connection_depth, driver_node.impl_->on_reply_cbs,
       driver_node.impl_->request_types, driver_node.impl_->make_request_cb,
-      node_thread));
+      node_thread, node_thread.impl_->thread_num));
   // Create forced timer
   forced_timer.reset(new ForcedEvTimer(node_thread.impl_->base));
 

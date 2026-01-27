@@ -22,6 +22,10 @@
 
 #include "oldisim/Query.h"
 
+// Enable timing tracking for PageRank operations
+// Uncomment the line below to enable timing tracking
+// #define PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+
 namespace oldisim {
 
 struct __attribute__((__packed__)) ResponsePacketHeader {
@@ -30,15 +34,43 @@ struct __attribute__((__packed__)) ResponsePacketHeader {
   uint64_t start_time;
   uint64_t processing_time;
   uint32_t payload_length;  // does not include header length
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t total_handler_duration;
+  uint64_t pagerank_duration;
+  uint64_t sleep_io_duration;
+  uint64_t compression_duration;
+  uint64_t pointer_chase_duration;
+  uint64_t response_generation_duration;
+#endif
 
   ResponsePacketHeader(uint32_t _type, uint64_t _request_id,
                        uint64_t _start_time, uint64_t _processing_time,
-                       uint32_t _payload_length)
+                       uint32_t _payload_length
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+                       ,
+                       uint64_t _total_handler_duration = 0,
+                       uint64_t _pagerank_duration = 0,
+                       uint64_t _sleep_io_duration = 0,
+                       uint64_t _compression_duration = 0,
+                       uint64_t _pointer_chase_duration = 0,
+                       uint64_t _response_generation_duration = 0
+#endif
+                       )
       : type(_type),
         request_id(_request_id),
         start_time(_start_time),
         processing_time(_processing_time),
-        payload_length(_payload_length) {}
+        payload_length(_payload_length)
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+        ,
+        total_handler_duration(_total_handler_duration),
+        pagerank_duration(_pagerank_duration),
+        sleep_io_duration(_sleep_io_duration),
+        compression_duration(_compression_duration),
+        pointer_chase_duration(_pointer_chase_duration),
+        response_generation_duration(_response_generation_duration)
+#endif
+        {}
 };
 
 /**
@@ -54,9 +86,26 @@ class Response {
   Response() : response_header_(0, 0, 0, 0, 0), payload_(nullptr) {}
 
   Response(uint32_t type, uint64_t request_id, uint64_t start_time,
-           uint64_t processing_time, uint32_t payload_length)
+           uint64_t processing_time, uint32_t payload_length
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+           ,
+           uint64_t total_handler_duration = 0,
+           uint64_t pagerank_duration = 0,
+           uint64_t sleep_io_duration = 0,
+           uint64_t compression_duration = 0,
+           uint64_t pointer_chase_duration = 0,
+           uint64_t response_generation_duration = 0
+#endif
+           )
       : response_header_(type, request_id, start_time, processing_time,
-                         payload_length),
+                         payload_length
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+                         , total_handler_duration,
+                         pagerank_duration, sleep_io_duration,
+                         compression_duration, pointer_chase_duration,
+                         response_generation_duration
+#endif
+                         ),
         payload_(nullptr) {}
 
   ResponsePacketHeader GetHeaderNetworkOrder() const {
@@ -66,6 +115,14 @@ class Response {
     header.start_time = htobe64(header.start_time);
     header.processing_time = htobe64(header.processing_time);
     header.payload_length = htobe32(header.payload_length);
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+    header.total_handler_duration = htobe64(header.total_handler_duration);
+    header.pagerank_duration = htobe64(header.pagerank_duration);
+    header.sleep_io_duration = htobe64(header.sleep_io_duration);
+    header.compression_duration = htobe64(header.compression_duration);
+    header.pointer_chase_duration = htobe64(header.pointer_chase_duration);
+    header.response_generation_duration = htobe64(header.response_generation_duration);
+#endif
 
     return header;
   }
@@ -78,6 +135,14 @@ class Response {
     result_header.start_time = be64toh(header->start_time);
     result_header.processing_time = be64toh(header->processing_time);
     result_header.payload_length = be32toh(header->payload_length);
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+    result_header.total_handler_duration = be64toh(header->total_handler_duration);
+    result_header.pagerank_duration = be64toh(header->pagerank_duration);
+    result_header.sleep_io_duration = be64toh(header->sleep_io_duration);
+    result_header.compression_duration = be64toh(header->compression_duration);
+    result_header.pointer_chase_duration = be64toh(header->pointer_chase_duration);
+    result_header.response_generation_duration = be64toh(header->response_generation_duration);
+#endif
 
     return result;
   }

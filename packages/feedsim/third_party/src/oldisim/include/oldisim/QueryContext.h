@@ -44,6 +44,15 @@ class QueryContext {
   const uint32_t packet_length;
   void* const payload;
   void SendResponse(const void* data, uint32_t data_length);
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  void SendResponse(const void* data, uint32_t data_length,
+                    uint64_t total_handler_duration,
+                    uint64_t pagerank_duration,
+                    uint64_t sleep_io_duration,
+                    uint64_t compression_duration,
+                    uint64_t pointer_chase_duration,
+                    uint64_t response_generation_duration);
+#endif
 
  private:
   ParentConnection& connection;

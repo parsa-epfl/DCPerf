@@ -51,6 +51,10 @@
 
 #include "generators/RankingGenerators.h"
 
+// Enable timing tracking for PageRank operations
+// Uncomment the line below to enable timing tracking
+// #define PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+
 // Shared configuration flags
 static gengetopt_args_info args;
 
@@ -148,6 +152,10 @@ void PageRankRequestHandler(
     oldisim::NodeThread& thread,
     oldisim::QueryContext& context,
     std::vector<ThreadData>& thread_data) {
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t handlerStart = GetTimeAccurateNano();
+#endif
+
   auto& this_thread = thread_data[thread.get_thread_num()];
   const int min_iterations = std::max(args.min_icache_iterations_arg, 0);
   const int num_iterations =
@@ -160,6 +168,9 @@ void PageRankRequestHandler(
     buster.RunNextMethod();
   }
 
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t pageRankStart = GetTimeAccurateNano();
+#endif
   // auto start = std::chrono::steady_clock::now();
   auto per_thread_subset = args.graph_subset_arg / args.cpu_threads_arg;
 
@@ -179,6 +190,10 @@ void PageRankRequestHandler(
   }
   auto fs = folly::collect(futures).get();
   int result = std::accumulate(fs.begin(), fs.end(), 0);
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t pageRankEnd = GetTimeAccurateNano();
+  uint64_t sleepIoStart = pageRankEnd;  // Reuse end time
+#endif
   // auto end = std::chrono::steady_clock::now();
   // auto duration =
   //     std::chrono::duration_cast<std::chrono::milliseconds>(end - start)
@@ -201,6 +216,10 @@ void PageRankRequestHandler(
                  return result + 1;
                });
   result = std::move(s).get();
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t sleepIoEnd = GetTimeAccurateNano();
+  uint64_t compressionStart = sleepIoEnd;  // Reuse end time
+#endif
 
   auto compressed = compressPayload(this_thread.random_string, result);
 
@@ -229,6 +248,10 @@ void PageRankRequestHandler(
   }
   auto cfs = folly::collect(compressionFutures).get();
   int cResult = std::accumulate(cfs.begin(), cfs.end(), 0);
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t compressionEnd = GetTimeAccurateNano();
+  uint64_t pointerChaseStart = compressionEnd;  // Reuse end time
+#endif
 
   /*
   auto r = folly::via(this_thread.srvCPUThreadPool.get(), [&]() {
@@ -250,6 +273,10 @@ void PageRankRequestHandler(
   }
   auto chaseFs = folly::collect(chaseFutures).get();
   int chaseResult = std::accumulate(chaseFs.begin(), chaseFs.end(), 0);
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t pointerChaseEnd = GetTimeAccurateNano();
+  uint64_t responseGenerationStart = pointerChaseEnd;  // Reuse end time
+#endif
 
   // Generate a response
   auto r = ranking::generators::generateRandomRankingResponse(
@@ -265,8 +292,25 @@ void PageRankRequestHandler(
 
   auto uncompressed = decompressPayload(compressed);
   auto resp1 = deserializePayload(buf.get());
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t responseGenerationEnd = GetTimeAccurateNano();
+  uint64_t handlerEnd = responseGenerationEnd;  // Reuse end time
 
+  // Calculate durations in nanoseconds
+  uint64_t totalHandlerDuration = handlerEnd - handlerStart;
+  uint64_t pageRankDuration = pageRankEnd - pageRankStart;
+  uint64_t sleepIoDuration = sleepIoEnd - sleepIoStart;
+  uint64_t compressionDuration = compressionEnd - compressionStart;
+  uint64_t pointerChaseDuration = pointerChaseEnd - pointerChaseStart;
+  uint64_t responseGenerationDuration = responseGenerationEnd - responseGenerationStart;
+
+  context.SendResponse(buf->data(), buf->length(),
+                       totalHandlerDuration, pageRankDuration,
+                       sleepIoDuration, compressionDuration,
+                       pointerChaseDuration, responseGenerationDuration);
+#else
   context.SendResponse(buf->data(), buf->length());
+#endif
 }
 
 int main(int argc, char** argv) {

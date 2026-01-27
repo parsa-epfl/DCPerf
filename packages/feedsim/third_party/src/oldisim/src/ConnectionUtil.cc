@@ -127,17 +127,76 @@ ConnectionUtil::MakeChildConnectionStatsMap(const ChildConnectionStats& stats,
     double latency_95p = stats.query_samplers_.at(type).get_nth(95);
     double latency_99p = stats.query_samplers_.at(type).get_nth(99);
     double dropped_requests = stats.dropped_requests_.at(type) / elapsed_time;
-    results.insert(
-        std::make_pair(type, std::map<std::string, double>(
-                                 {{"qps", qps},
-                                  {"rx_mbps", rx_mbps},
-                                  {"tx_mbps", tx_mbps},
-                                  {"latency_mean", latency_mean},
-                                  {"latency_50p", latency_50p},
-                                  {"latency_90p", latency_90p},
-                                  {"latency_95p", latency_95p},
-                                  {"latency_99p", latency_99p},
-                                  {"dropped_requests", dropped_requests}})));
+    double processing_time_mean = stats.query_processing_time_samplers_.at(type).average();
+    double processing_time_50p = stats.query_processing_time_samplers_.at(type).get_nth(50);
+    double processing_time_90p = stats.query_processing_time_samplers_.at(type).get_nth(90);
+    double processing_time_95p = stats.query_processing_time_samplers_.at(type).get_nth(95);
+    double processing_time_99p = stats.query_processing_time_samplers_.at(type).get_nth(99);
+
+    std::map<std::string, double> type_stats = {
+        {"qps", qps},
+        {"rx_mbps", rx_mbps},
+        {"tx_mbps", tx_mbps},
+        {"latency_mean", latency_mean},
+        {"latency_50p", latency_50p},
+        {"latency_90p", latency_90p},
+        {"latency_95p", latency_95p},
+        {"latency_99p", latency_99p},
+        {"processing_time_mean", processing_time_mean},
+        {"processing_time_50p", processing_time_50p},
+        {"processing_time_90p", processing_time_90p},
+        {"processing_time_95p", processing_time_95p},
+        {"processing_time_99p", processing_time_99p},
+        {"dropped_requests", dropped_requests}
+    };
+
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+    // Add timing duration percentiles (only 95p active, others commented)
+    // double total_handler_mean = stats.total_handler_duration_samplers_.at(type).average();
+    // double total_handler_50p = stats.total_handler_duration_samplers_.at(type).get_nth(50);
+    // double total_handler_90p = stats.total_handler_duration_samplers_.at(type).get_nth(90);
+    double total_handler_95p = stats.total_handler_duration_samplers_.at(type).get_nth(95);
+    // double total_handler_99p = stats.total_handler_duration_samplers_.at(type).get_nth(99);
+
+    // double pagerank_mean = stats.pagerank_duration_samplers_.at(type).average();
+    // double pagerank_50p = stats.pagerank_duration_samplers_.at(type).get_nth(50);
+    // double pagerank_90p = stats.pagerank_duration_samplers_.at(type).get_nth(90);
+    double pagerank_95p = stats.pagerank_duration_samplers_.at(type).get_nth(95);
+    // double pagerank_99p = stats.pagerank_duration_samplers_.at(type).get_nth(99);
+
+    // double sleep_io_mean = stats.sleep_io_duration_samplers_.at(type).average();
+    // double sleep_io_50p = stats.sleep_io_duration_samplers_.at(type).get_nth(50);
+    // double sleep_io_90p = stats.sleep_io_duration_samplers_.at(type).get_nth(90);
+    double sleep_io_95p = stats.sleep_io_duration_samplers_.at(type).get_nth(95);
+    // double sleep_io_99p = stats.sleep_io_duration_samplers_.at(type).get_nth(99);
+
+    // double compression_mean = stats.compression_duration_samplers_.at(type).average();
+    // double compression_50p = stats.compression_duration_samplers_.at(type).get_nth(50);
+    // double compression_90p = stats.compression_duration_samplers_.at(type).get_nth(90);
+    double compression_95p = stats.compression_duration_samplers_.at(type).get_nth(95);
+    // double compression_99p = stats.compression_duration_samplers_.at(type).get_nth(99);
+
+    // double pointer_chase_mean = stats.pointer_chase_duration_samplers_.at(type).average();
+    // double pointer_chase_50p = stats.pointer_chase_duration_samplers_.at(type).get_nth(50);
+    // double pointer_chase_90p = stats.pointer_chase_duration_samplers_.at(type).get_nth(90);
+    double pointer_chase_95p = stats.pointer_chase_duration_samplers_.at(type).get_nth(95);
+    // double pointer_chase_99p = stats.pointer_chase_duration_samplers_.at(type).get_nth(99);
+
+    // double response_gen_mean = stats.response_generation_duration_samplers_.at(type).average();
+    // double response_gen_50p = stats.response_generation_duration_samplers_.at(type).get_nth(50);
+    // double response_gen_90p = stats.response_generation_duration_samplers_.at(type).get_nth(90);
+    double response_gen_95p = stats.response_generation_duration_samplers_.at(type).get_nth(95);
+    // double response_gen_99p = stats.response_generation_duration_samplers_.at(type).get_nth(99);
+
+    type_stats["total_handler_95p"] = total_handler_95p;
+    type_stats["pagerank_95p"] = pagerank_95p;
+    type_stats["sleep_io_95p"] = sleep_io_95p;
+    type_stats["compression_95p"] = compression_95p;
+    type_stats["pointer_chase_95p"] = pointer_chase_95p;
+    type_stats["response_gen_95p"] = response_gen_95p;
+#endif
+
+    results.insert(std::make_pair(type, type_stats));
   }
 
   return results;

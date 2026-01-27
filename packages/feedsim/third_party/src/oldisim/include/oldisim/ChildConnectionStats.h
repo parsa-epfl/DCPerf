@@ -26,6 +26,10 @@
 #include "oldisim/Response.h"
 #include "oldisim/Util.h"
 
+// Enable timing tracking for PageRank operations
+// Uncomment the line below to enable timing tracking
+// #define PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+
 namespace oldisim {
 
 class ChildConnectionStats {
@@ -39,6 +43,20 @@ class ChildConnectionStats {
           std::make_pair(type, LogHistogramSampler(kHistogramBins)));
       query_processing_time_samplers_.insert(
           std::make_pair(type, LogHistogramSampler(kHistogramBins)));
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+      total_handler_duration_samplers_.insert(
+          std::make_pair(type, LogHistogramSampler(kHistogramBins)));
+      pagerank_duration_samplers_.insert(
+          std::make_pair(type, LogHistogramSampler(kHistogramBins)));
+      sleep_io_duration_samplers_.insert(
+          std::make_pair(type, LogHistogramSampler(kHistogramBins)));
+      compression_duration_samplers_.insert(
+          std::make_pair(type, LogHistogramSampler(kHistogramBins)));
+      pointer_chase_duration_samplers_.insert(
+          std::make_pair(type, LogHistogramSampler(kHistogramBins)));
+      response_generation_duration_samplers_.insert(
+          std::make_pair(type, LogHistogramSampler(kHistogramBins)));
+#endif
       tx_bytes_[type] = 0;
       rx_bytes_[type] = 0;
       query_counts_[type] = 0;
@@ -52,6 +70,14 @@ class ChildConnectionStats {
   uint64_t end_time_;
   std::map<uint32_t, LogHistogramSampler> query_samplers_;
   std::map<uint32_t, LogHistogramSampler> query_processing_time_samplers_;
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  std::map<uint32_t, LogHistogramSampler> total_handler_duration_samplers_;
+  std::map<uint32_t, LogHistogramSampler> pagerank_duration_samplers_;
+  std::map<uint32_t, LogHistogramSampler> sleep_io_duration_samplers_;
+  std::map<uint32_t, LogHistogramSampler> compression_duration_samplers_;
+  std::map<uint32_t, LogHistogramSampler> pointer_chase_duration_samplers_;
+  std::map<uint32_t, LogHistogramSampler> response_generation_duration_samplers_;
+#endif
   std::map<uint32_t, uint64_t> tx_bytes_;
   std::map<uint32_t, uint64_t> rx_bytes_;
   std::map<uint32_t, uint64_t> query_counts_;
@@ -77,6 +103,22 @@ class ChildConnectionStats {
     query_processing_time_samplers_.at(originating_request.GetType())
         .sample(response.GetProcessingTime() / 1000000.0);
     rx_bytes_.at(response.GetType()) += response.GetResponsePacketSize();
+
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+    // Log timing durations (convert from nanoseconds to milliseconds)
+    total_handler_duration_samplers_.at(originating_request.GetType())
+        .sample(response.response_header_.total_handler_duration / 1000000.0);
+    pagerank_duration_samplers_.at(originating_request.GetType())
+        .sample(response.response_header_.pagerank_duration / 1000000.0);
+    sleep_io_duration_samplers_.at(originating_request.GetType())
+        .sample(response.response_header_.sleep_io_duration / 1000000.0);
+    compression_duration_samplers_.at(originating_request.GetType())
+        .sample(response.response_header_.compression_duration / 1000000.0);
+    pointer_chase_duration_samplers_.at(originating_request.GetType())
+        .sample(response.response_header_.pointer_chase_duration / 1000000.0);
+    response_generation_duration_samplers_.at(originating_request.GetType())
+        .sample(response.response_header_.response_generation_duration / 1000000.0);
+#endif
   }
 
   void LogDroppedRequest(uint32_t request_type) {
@@ -101,6 +143,27 @@ class ChildConnectionStats {
       query_processing_time_samplers_.at(sampler.first)
           .accumulate(sampler.second);
     }
+
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+    for (const auto& sampler : cs.total_handler_duration_samplers_) {
+      total_handler_duration_samplers_.at(sampler.first).accumulate(sampler.second);
+    }
+    for (const auto& sampler : cs.pagerank_duration_samplers_) {
+      pagerank_duration_samplers_.at(sampler.first).accumulate(sampler.second);
+    }
+    for (const auto& sampler : cs.sleep_io_duration_samplers_) {
+      sleep_io_duration_samplers_.at(sampler.first).accumulate(sampler.second);
+    }
+    for (const auto& sampler : cs.compression_duration_samplers_) {
+      compression_duration_samplers_.at(sampler.first).accumulate(sampler.second);
+    }
+    for (const auto& sampler : cs.pointer_chase_duration_samplers_) {
+      pointer_chase_duration_samplers_.at(sampler.first).accumulate(sampler.second);
+    }
+    for (const auto& sampler : cs.response_generation_duration_samplers_) {
+      response_generation_duration_samplers_.at(sampler.first).accumulate(sampler.second);
+    }
+#endif
 
     for (const auto& stat : cs.tx_bytes_) {
       tx_bytes_[stat.first] += stat.second;
@@ -130,6 +193,14 @@ class ChildConnectionStats {
     for (const auto& stat : query_samplers_) {
       query_samplers_.at(stat.first).Reset();
       query_processing_time_samplers_.at(stat.first).Reset();
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+      total_handler_duration_samplers_.at(stat.first).Reset();
+      pagerank_duration_samplers_.at(stat.first).Reset();
+      sleep_io_duration_samplers_.at(stat.first).Reset();
+      compression_duration_samplers_.at(stat.first).Reset();
+      pointer_chase_duration_samplers_.at(stat.first).Reset();
+      response_generation_duration_samplers_.at(stat.first).Reset();
+#endif
       tx_bytes_[stat.first] = 0;
       rx_bytes_[stat.first] = 0;
       query_counts_[stat.first] = 0;

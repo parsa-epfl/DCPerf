@@ -16,6 +16,8 @@
 
 #include <stdio.h>
 #include <stdarg.h>
+#include <time.h>
+#include <sys/time.h>
 
 log_level_t log_level = INFO;
 
@@ -27,8 +29,16 @@ void log_file_line(log_level_t level, const char *file, int line,
 
   va_list args;
   char new_format[512];
-
-  snprintf(new_format, sizeof(new_format), "%s(%d): %s\n", file, line, format);
+  char time_str[64];
+  
+  struct timeval tv;
+  gettimeofday(&tv, NULL);
+  time_t nowtime = tv.tv_sec;
+  struct tm *nowtm = localtime(&nowtime);
+  strftime(time_str, sizeof(time_str), "%Y-%m-%d %H:%M:%S", nowtm);
+  
+  snprintf(new_format, sizeof(new_format), "[%s.%06ld] %s(%d): %s\n", 
+           time_str, tv.tv_usec, file, line, format);
 
   va_start(args, format);
   vfprintf(stderr, new_format, args);

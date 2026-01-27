@@ -91,4 +91,26 @@ void QueryContext::SendResponse(const void* data, uint32_t data_length) {
                           data_length, logger);
   response_sent = true;
 }
+
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+void QueryContext::SendResponse(const void* data, uint32_t data_length,
+                                uint64_t total_handler_duration,
+                                uint64_t pagerank_duration,
+                                uint64_t sleep_io_duration,
+                                uint64_t compression_duration,
+                                uint64_t pointer_chase_duration,
+                                uint64_t response_generation_duration) {
+  // Make sure this is first time sending a response
+  assert(!response_sent);
+
+  // Send it over the wire
+  uint64_t processing_time = GetTimeAccurateNano() - received_time;
+  connection.SendResponse(type, request_id, start_time, processing_time, data,
+                          data_length, logger, total_handler_duration,
+                          pagerank_duration, sleep_io_duration,
+                          compression_duration, pointer_chase_duration,
+                          response_generation_duration);
+  response_sent = true;
+}
+#endif
 }  // namespace oldisim

@@ -48,6 +48,18 @@ class ParentConnection {
                     uint64_t start_time, uint64_t processing_time,
                     const void* data, uint32_t data_length,
                     std::function<void(const Response&)> logger = nullptr);
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  void SendResponse(uint32_t response_type, uint64_t query_id,
+                    uint64_t start_time, uint64_t processing_time,
+                    const void* data, uint32_t data_length,
+                    std::function<void(const Response&)> logger,
+                    uint64_t total_handler_duration,
+                    uint64_t pagerank_duration,
+                    uint64_t sleep_io_duration,
+                    uint64_t compression_duration,
+                    uint64_t pointer_chase_duration,
+                    uint64_t response_generation_duration);
+#endif
 
  private:
   struct ParentConnectionImpl;

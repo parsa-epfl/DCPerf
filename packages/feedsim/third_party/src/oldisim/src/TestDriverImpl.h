@@ -43,6 +43,7 @@ struct TestDriver::TestDriverImpl {
   int next_connection_index;
   int num_ready_connections;
   int max_connection_depth;
+  uint64_t thread_id;
   uint64_t next_request_id;
   NodeThread& node_thread;
   ChildConnectionStats current_child_stats;
@@ -68,7 +69,8 @@ struct TestDriver::TestDriverImpl {
                      uint32_t, const DriverNodeResponseCallback>& _on_reply_cbs,
                  const std::set<uint32_t>& request_types,
                  const DriverNodeMakeRequestCallback& make_request_cb,
-                 NodeThread& _node_thread);
+                 NodeThread& _node_thread,
+                 uint64_t _thread_id = 0);
   ~TestDriverImpl();
   int GetNextConnectionIndex();
 

@@ -4,25 +4,33 @@
 # This source code is licensed under the MIT license found in the
 # LICENSE file in the root directory of this source tree.
 
-BREPS_LFILE=/tmp/feedsim_log.txt
 IS_FIXED_QPS=0
-FIXQPS_SUFFIX=""
 THIS_CMD="$0 $*"
 
 if [[ "$THIS_CMD" =~ -q.*[0-9]+ ]]; then
     IS_FIXED_QPS=1
-    FIXQPS_SUFFIX="fixqps-"
 fi
 
 FEEDSIM_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
-FEEDSIM_LOG_PREFIX="${FEEDSIM_ROOT}/feedsim-multi-inst-${FIXQPS_SUFFIX}"
+
+# Delete and recreate LOGs directory
+rm -rf "${FEEDSIM_ROOT}/LOGs"
+mkdir -p "${FEEDSIM_ROOT}/LOGs"
+rm -rf "${FEEDSIM_ROOT}/result"
+mkdir -p "${FEEDSIM_ROOT}/result"
+
+function log_message() {
+    echo "${1}" | tee -a "${FEEDSIM_ROOT}/LOGs/run-feedsim-multi.sh.log"
+}
+
+FEEDSIM_LOG_PREFIX="${FEEDSIM_ROOT}/LOGs/run.sh."
 NCPU="$(nproc)"
 NUM_INSTANCES="$(( ( NCPU + 99 ) / 100 ))"
 
 NUM_ICACHE_ITERATIONS="1600000"
 
 SCRIPT_NAME="$(basename "$0")"
-echo "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD}"
+log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD}"
 
 while [ $# -ne 0 ]; do
     case $1 in
@@ -45,7 +53,7 @@ while [ $# -ne 0 ]; do
     case $1 in
         -n|-i)
             if [ -z "$2" ]; then
-                echo "Invalid option: '$1' requires an argument" 1>&2
+                log_message "Invalid option: '$1' requires an argument" 1>&2
                 exit 1
             fi
             shift   # Additional shift for the argument
@@ -92,17 +100,18 @@ function get_cpu_range() {
         RES="${RES},${SMT_BASE}-${SMT_END}"
     fi
 
-    echo "$RES"
+    log_message "$RES"
 }
 
-echo > $BREPS_LFILE
+
 # shellcheck disable=SC2086
 for i in $(seq 1 ${NUM_INSTANCES}); do
     CORE_RANGE="$(get_cpu_range "${NUM_INSTANCES}" "$((i - 1))")"
-    CMD="IS_AUTOSCALE_RUN=${NUM_INSTANCES} taskset --cpu-list ${CORE_RANGE} ${FEEDSIM_ROOT}/run.sh -p ${PORT} -i ${NUM_ICACHE_ITERATIONS} -o feedsim_results_${FIXQPS_SUFFIX}${i}.txt $*"
+    CMD="IS_AUTOSCALE_RUN=${NUM_INSTANCES} taskset --cpu-list ${CORE_RANGE} ${FEEDSIM_ROOT}/run.sh -p ${PORT} -i ${NUM_ICACHE_ITERATIONS} -o  ${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt --inst-num ${i} $*"
+    log_message "$CMD"
     echo "$CMD" > "${FEEDSIM_LOG_PREFIX}${i}.log"
     # shellcheck disable=SC2068,SC2069
-    IS_AUTOSCALE_RUN=${NUM_INSTANCES} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "feedsim_results_${FIXQPS_SUFFIX}${i}.txt" "$@" 2>&1 | tee -a "${FEEDSIM_LOG_PREFIX}${i}.log" &
+    IS_AUTOSCALE_RUN=${NUM_INSTANCES} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt" --inst-num "${i}" "$@" 2>&1 | tee -a "${FEEDSIM_LOG_PREFIX}${i}.log" &
     PIDS+=("$!")
     PHY_CORE_ID=$((PHY_CORE_ID + CORES_PER_INST))
     SMT_ID=$((SMT_ID + CORES_PER_INST))
@@ -117,7 +126,7 @@ done
 BC_MAX_FN='define max (a, b) { if (a >= b) return (a); return (b); }'
 BC_MIN_FN='define min (a, b) { if (a <= b) return (a); return (b); }'
 function analyze_and_print_results() {
-    echo "{"
+    log_message "{"
     total_req_qps=0.0
     total_actual_qps=0.0
     avg_latency=0.0
@@ -129,6 +138,7 @@ function analyze_and_print_results() {
     max_req_qps=0.0
 
     # shellcheck disable=SC2086
+    # TODO: This does not work when there are multiple fixed QPS runs in each instance
     for i in $(seq 1 ${NUM_INSTANCES}); do
         final_requested_qps="$(grep -oP 'final requested_qps = \K[0-9.]+' "${FEEDSIM_LOG_PREFIX}${i}.log")"
         if [ -z "$final_requested_qps" ]; then
@@ -140,7 +150,7 @@ function analyze_and_print_results() {
         latency="$(grep -oP 'final.*latency = \K[0-9.]+' "${FEEDSIM_LOG_PREFIX}${i}.log")"
         target_percentile="$(grep -oP 'Searching for QPS where \K[0-9p]+' "${FEEDSIM_LOG_PREFIX}${i}.log")"
         target_latency="$(grep -oP 'Searching for.*latency <= \K[0-9]+(?= msec)' "${FEEDSIM_LOG_PREFIX}${i}.log")"
-        echo "    \"${i}\": {\"final_requested_qps\": ${final_requested_qps}, \"final_achieved_qps\": ${measured_qps}, \"final_latency_msec\": ${latency}},"
+        log_message "    \"${i}\": {\"final_requested_qps\": ${final_requested_qps}, \"final_achieved_qps\": ${measured_qps}, \"final_latency_msec\": ${latency}},"
         total_req_qps="$(echo "${total_req_qps} + ${final_requested_qps}" | bc)"
         total_actual_qps="$(echo "${total_actual_qps} + ${measured_qps}" | bc)"
         avg_latency="$(echo "${avg_latency} + ${latency}" | bc)"
@@ -150,18 +160,18 @@ function analyze_and_print_results() {
     done
 
     avg_latency="$(echo "scale=2; 1.0 * ${avg_latency} / ${successful_insts}" | bc)"
-    echo "    \"overall\": {\"final_requested_qps\": ${total_req_qps}, \"final_achieved_qps\": ${total_actual_qps}, \"average_latency_msec\": ${avg_latency}},"
-    echo "    \"target_percentile\": \"${target_percentile}\","
-    echo "    \"target_latency_msec\": \"${target_latency}\","
-    echo "    \"spawned_instances\": \"${NUM_INSTANCES}\","
-    echo "    \"successful_instances\": ${successful_insts},"
-    echo "    \"min_qps\": ${min_qps},"
-    echo "    \"max_qps\": ${max_qps},"
-    echo "    \"is_fixed_qps\": ${IS_FIXED_QPS}"
-    echo "}"
+    log_message "    \"overall\": {\"final_requested_qps\": ${total_req_qps}, \"final_achieved_qps\": ${total_actual_qps}, \"average_latency_msec\": ${avg_latency}},"
+    log_message "    \"target_percentile\": \"${target_percentile}\","
+    log_message "    \"target_latency_msec\": \"${target_latency}\","
+    log_message "    \"spawned_instances\": \"${NUM_INSTANCES}\","
+    log_message "    \"successful_instances\": ${successful_insts},"
+    log_message "    \"min_qps\": ${min_qps},"
+    log_message "    \"max_qps\": ${max_qps},"
+    log_message "    \"is_fixed_qps\": ${IS_FIXED_QPS}"
+    log_message "}"
     if [[ "$(echo "${min_qps} < 0.8 * ${max_qps}" | bc)" = "1" ]]; then
         # ceil(max_req_qps)
-        echo "(${max_req_qps} + 1) / 1" | bc  > /tmp/max_req_qps
+        echo "(${max_req_qps} + 1) / 1" | bc  > ${FEEDSIM_ROOT}/LOGs/max_req_qps
         return 1
     else
         return 0
@@ -180,8 +190,8 @@ fi
 
 # rerun this program with fixed qps if detecting high variance
 if [[ "$is_unstable_run" = 1 ]] && [[ "$IS_FIXED_QPS" = 0 ]] && [[ -z "$IS_RERUN" ]]; then
-    max_req_qps="$(cat /tmp/max_req_qps)"
-    echo "Detected unstable run - rerunning with fixed QPS at ${max_req_qps}..."
+    max_req_qps="$(cat ${FEEDSIM_ROOT}/LOGs/max_req_qps)"
+    log_message "Detected unstable run - rerunning with fixed QPS at ${max_req_qps}..."
     # shellcheck disable=SC2068
     sleep 60
     IS_RERUN=1 $THIS_CMD -q "${max_req_qps}"

@@ -3,6 +3,7 @@ FROM ghcr.io/parsa-epfl/dcperf/dcperf-base:latest
 
 # Update package lists
 RUN apt-get update
+RUN apt-get install curl vim
 
 # Set working directory
 WORKDIR /DCPerf

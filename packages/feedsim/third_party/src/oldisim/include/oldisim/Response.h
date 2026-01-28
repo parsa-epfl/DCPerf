@@ -163,6 +163,39 @@ class Response {
     return response_header_.processing_time;
   }
 
+#ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
+  uint64_t GetDurationTotal() const {
+    return response_header_.total_handler_duration;
+  }
+
+  uint64_t GetDurationPageRank() const {
+    return response_header_.pagerank_duration;
+  }
+
+  uint64_t GetDurationIo() const {
+    return response_header_.sleep_io_duration;
+  }
+
+  uint64_t GetDurationCompression() const {
+    return response_header_.compression_duration;
+  }
+
+  uint64_t GetDurationChase() const {
+    return response_header_.pointer_chase_duration;
+  }
+
+  uint64_t GetDurationResponse() const {
+    return response_header_.response_generation_duration;
+  }
+#else
+  uint64_t GetDurationTotal() const { return 0; }
+  uint64_t GetDurationPageRank() const { return 0; }
+  uint64_t GetDurationIo() const { return 0; }
+  uint64_t GetDurationCompression() const { return 0; }
+  uint64_t GetDurationChase() const { return 0; }
+  uint64_t GetDurationResponse() const { return 0; }
+#endif
+
   Query RebuildOriginatingQuery() const {
     Query originating_query;
     originating_query.query_header_.type = response_header_.type;

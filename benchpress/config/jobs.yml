@@ -313,8 +313,8 @@
       options:
         is_move: true
         after:
-          - 'benchmarks/feedsim/feedsim_results.txt'
-          - 'benchmarks/feedsim/src/perf.data'
+          - 'benchmarks/feedsim/LOGs'
+          - 'benchmarks/feedsim/result'
 
 - name: feedsim_autoscale
   benchmark: feedsim_autoscale
@@ -340,9 +340,8 @@
       options:
         is_move: true
         after:
-          - 'benchmarks/feedsim/feedsim_results*.txt'
-          - 'benchmarks/feedsim/feedsim-multi-inst-*.log'
-          - 'benchmarks/feedsim/src/perf.data'
+          - 'benchmarks/feedsim/LOGs'
+          - 'benchmarks/feedsim/result'
 
 
 - name: feedsim_autoscale_arm
@@ -371,9 +370,8 @@
       options:
         is_move: true
         after:
-          - 'benchmarks/feedsim/feedsim_results*.txt'
-          - 'benchmarks/feedsim/feedsim-multi-inst-*.log'
-          - 'benchmarks/feedsim/src/perf.data'
+          - 'benchmarks/feedsim/LOGs'
+          - 'benchmarks/feedsim/result'
 
 
 - benchmark: spark_standalone

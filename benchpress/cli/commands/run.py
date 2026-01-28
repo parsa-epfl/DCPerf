@@ -178,6 +178,13 @@ class RunCommand(BenchpressCommand):
             date = now.strftime("%Y%m%d_%H%M")
             symlink = job.name + "_timestamp:" + date + "_" + job.uuid
             os.symlink(metrics_dir, f"benchmark_metrics_{symlink}")
+            
+            # Create/update latest symlink
+            latest_symlink = f"benchmark_metrics_{job.name}_latest"
+            if os.path.exists(latest_symlink) or os.path.islink(latest_symlink):
+                os.remove(latest_symlink)
+            os.symlink(metrics_dir, latest_symlink)
+            
             sys_specs_dict["run_id"] = job.uuid
             sys_specs_dict["timestamp"] = job.timestamp
 

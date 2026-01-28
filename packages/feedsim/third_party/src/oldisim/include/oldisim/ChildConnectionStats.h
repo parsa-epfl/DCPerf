@@ -107,17 +107,17 @@ class ChildConnectionStats {
 #ifdef PASS_PAGERANK_HANDLER_DURATION_TO_RESPONSE
     // Log timing durations (convert from nanoseconds to milliseconds)
     total_handler_duration_samplers_.at(originating_request.GetType())
-        .sample(response.response_header_.total_handler_duration / 1000000.0);
+        .sample(response.GetDurationTotal() / 1000000.0);
     pagerank_duration_samplers_.at(originating_request.GetType())
-        .sample(response.response_header_.pagerank_duration / 1000000.0);
+        .sample(response.GetDurationPageRank() / 1000000.0);
     sleep_io_duration_samplers_.at(originating_request.GetType())
-        .sample(response.response_header_.sleep_io_duration / 1000000.0);
+        .sample(response.GetDurationIo() / 1000000.0);
     compression_duration_samplers_.at(originating_request.GetType())
-        .sample(response.response_header_.compression_duration / 1000000.0);
+        .sample(response.GetDurationCompression() / 1000000.0);
     pointer_chase_duration_samplers_.at(originating_request.GetType())
-        .sample(response.response_header_.pointer_chase_duration / 1000000.0);
+        .sample(response.GetDurationChase() / 1000000.0);
     response_generation_duration_samplers_.at(originating_request.GetType())
-        .sample(response.response_header_.response_generation_duration / 1000000.0);
+        .sample(response.GetDurationResponse() / 1000000.0);
 #endif
   }
 

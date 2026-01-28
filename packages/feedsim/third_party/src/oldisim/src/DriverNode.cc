@@ -403,7 +403,7 @@ void DriverNode::DriverNodeThread::PostSnapshotCallback() {
   test_driver->impl_->last_child_stats =
       test_driver->impl_->current_child_stats;
   // test_driver->impl_->last_child_stats.end_time_ = GetTimeAccurateNano();
-  test_driver->impl_->current_child_stats.LogElapsedTime();
+  test_driver->impl_->last_child_stats.LogElapsedTime();
   // Reset stats
   test_driver->impl_->current_child_stats.Reset();
 }
@@ -569,7 +569,7 @@ void DriverNode::Run(uint32_t num_threads, bool thread_pinning,
         thread->test_driver->impl_->current_child_stats);
   }
 
-  double elapsed_time_seconds = (impl_->total_child_stats->elapsed_time_ / 1000000000.0) / impl_->threads.size();
+  double elapsed_time_seconds = (impl_->total_child_stats->elapsed_time_ / 1000000000.0);
 
   // Print stats
   for (uint32_t type : impl_->request_types) {

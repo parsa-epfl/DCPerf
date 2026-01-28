@@ -42,10 +42,11 @@ class CopyMoveHook(Hook):
                 else:
                     shutil.copy(src, dest)
             elif os.path.isdir(src):
+                dest_path = os.path.join(dest, os.path.basename(src))
                 if move:
-                    shutil.move(src, dest)
+                    shutil.move(src, dest_path)
                 else:
-                    shutil.copytree(src, dest)
+                    shutil.copytree(src, dest_path, dirs_exist_ok=True)
             else:
                 logger.warning(f"Could not copy {src}.")
 

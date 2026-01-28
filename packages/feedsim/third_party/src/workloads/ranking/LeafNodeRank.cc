@@ -325,8 +325,14 @@ int main(int argc, char** argv) {
   if (args.quiet_given != 0u) {
     log_level = QUIET;
   }
-  int fake_argc = 1;
-  char* fake_argv[2] = {const_cast<char*>("./LeafNodeRank"), nullptr};
+  int fake_argc = 3;
+  char* fake_argv[4] = {
+      const_cast<char*>("./LeafNodeRank"),
+      const_cast<char*>("--dynamic_cputhreadpoolexecutor=false"),
+      const_cast<char*>("--v=0"),
+      nullptr};
+  // int fake_argc = 1;
+  // char* fake_argv[2] = {const_cast<char*>("./LeafNodeRank"), nullptr};
   char** sargv = static_cast<char**>(fake_argv);
   folly::init(&fake_argc, &sargv);
   auto cpuThreadPool =

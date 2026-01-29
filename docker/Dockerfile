@@ -1,11 +1,11 @@
-FROM akrishnaams/ubuntu2204:latest
-# FROM ubuntu:22.04
+# FROM akrishnaams/ubuntu2204:latest
+FROM ubuntu:22.04
 
 ENV DEBIAN_FRONTEND=noninteractive
 
 # Install dependencies quietly
 RUN apt-get update -qq && \
-    apt-get install -y -qq wget tmux python3-pip git dmidecode kmod policycoreutils \
+    apt-get install -y -qq wget tmux python3-pip git dmidecode kmod policycoreutils curl \
                           sudo lshw iputils-ping bc iperf3 
 
 # Install Python dependencies

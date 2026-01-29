@@ -1,9 +1,10 @@
 # Start from the dcperf base image
-FROM ghcr.io/parsa-epfl/dcperf/dcperf-base:latest
+FROM ghcr.io/parsa-epfl/dcperf/dcperf-base-x86_64:latest
+# FROM ghcr.io/parsa-epfl/dcperf/dcperf-base-arm64:latest
 
 # Update package lists
 RUN apt-get update
-RUN apt-get install curl vim
+RUN apt-get install -y curl vim
 
 # Set working directory
 WORKDIR /DCPerf

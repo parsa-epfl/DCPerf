@@ -30,13 +30,15 @@ NUM_INSTANCES="$(( ( NCPU + 99 ) / 100 ))"
 NUM_ICACHE_ITERATIONS="1600000"
 
 SCRIPT_NAME="$(basename "$0")"
-log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD}"
+log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0}"
+log_message "Total CPUs: ${NCPU}, Default instances: ${NUM_INSTANCES}"
 
 while [ $# -ne 0 ]; do
     case $1 in
         -n)
             if [[ "$2" -gt 0 ]]; then
                 NUM_INSTANCES="$2"
+                log_message "Setting NUM_INSTANCES to ${NUM_INSTANCES}"
             fi
             ;;
         -i)
@@ -68,20 +70,146 @@ PORT=21212
 PIDS=()
 
 function get_cpu_range() {
-    total_instances="$1"
-    inst_id="$2"
-    has_smt="$(cat /sys/devices/system/cpu/smt/active)"
+    local __resultvar_range=$1
+    local __resultvar_cpus=$2
+    local total_instances="$3"
+    local inst_id="$4"
+
+    # Note: this assumes that SMT is either fully enabled or fully disabled. Odd number of total logical CPUs is not supported.
+    # Also assumes that each physical core has 2 threads when SMT is enabled.
+    has_smt="$(cat /sys/devices/system/cpu/smt/active 2>/dev/null || echo 0)"
 
     NPROC="$(nproc)"
+    
+    # Topology-based CPU allocation is disabled because:
+    # 1. In containers (Docker/cgroups), /sys/devices/system/cpu shows HOST CPUs, not container limits
+    # 2. The number of CPUs from topology may not match nproc (which respects cgroup limits)
+    # 3. Fallback approach using nproc works correctly in both bare metal and containers
+    #
+    # # Try to build a mapping of physical cores to their thread siblings
+    # # by reading actual CPU topology from sysfs
+    # declare -A core_to_threads
+    # declare -a physical_cores
+    # topology_available=1
+    # 
+    # # Check if we're in a container (Docker/cgroup limits may not match sysfs)
+    # in_container=0
+    # if [ -f "/.dockerenv" ] || [ -f "/run/.containerenv" ] || grep -q "docker\|lxc" /proc/1/cgroup 2>/dev/null; then
+    #     in_container=1
+    #     echo "Container detected, skipping topology-based CPU allocation" >&2
+    #     topology_available=0
+    # fi
+    # 
+    # # Check if sysfs CPU directory exists
+    # if [ "$topology_available" -eq 1 ] && [ ! -d "/sys/devices/system/cpu" ]; then
+    #     topology_available=0
+    # elif [ "$topology_available" -eq 1 ]; then
+    #     for cpu in /sys/devices/system/cpu/cpu[0-9]*; do
+    #         # Check if glob pattern actually matched any files
+    #         if [ ! -e "$cpu" ]; then
+    #             topology_available=0
+    #             break
+    #         fi
+    #         
+    #         cpu_id="${cpu##*/cpu}"
+    #         if [ -f "$cpu/topology/core_id" ]; then
+    #             core_id=$(cat "$cpu/topology/core_id" 2>/dev/null)
+    #             if [ -z "$core_id" ]; then
+    #                 topology_available=0
+    #                 break
+    #             fi
+    #         else
+    #             topology_available=0
+    #             break
+    #         fi
+    #         
+    #         # Add this CPU to the list for its physical core
+    #         if [ -z "${core_to_threads[$core_id]}" ]; then
+    #             core_to_threads[$core_id]="$cpu_id"
+    #             physical_cores+=("$core_id")
+    #         else
+    #             core_to_threads[$core_id]="${core_to_threads[$core_id]},$cpu_id"
+    #         fi
+    #     done
+    # fi
+    # 
+    # # Check if topology reading succeeded and matches nproc
+    # if [ "$topology_available" -eq 1 ] && [ "${#physical_cores[@]}" -gt 0 ]; then
+    #     # Validate: total logical CPUs from topology should match nproc
+    #     total_logical_cpus=0
+    #     for core_id in "${physical_cores[@]}"; do
+    #         IFS=',' read -ra threads <<< "${core_to_threads[$core_id]}"
+    #         total_logical_cpus=$((total_logical_cpus + ${#threads[@]}))
+    #     done
+    #     
+    #     if [ "$total_logical_cpus" -ne "$NPROC" ]; then
+    #         echo "Warning: Topology CPUs ($total_logical_cpus) != nproc ($NPROC), using fallback" >&2
+    #         topology_available=0
+    #     fi
+    # fi
+    # 
+    # # Check if topology reading succeeded
+    # if [ "$topology_available" -eq 1 ] && [ "${#physical_cores[@]}" -gt 0 ]; then
+    #     # Use topology-based approach
+    #     echo "Using topology-based CPU allocation" >&2
+    #     
+    #     # Sort physical cores numerically
+    #     IFS=$'\n' physical_cores=($(sort -n <<<"${physical_cores[*]}"))
+    #     unset IFS
+    #     
+    #     NCORES="${#physical_cores[@]}"
+    #     CORES_PER_INST="$((NCORES / total_instances))"
+    #     REMAINING_CORES="$((NCORES - CORES_PER_INST * total_instances))"
+    #     EXTRA_CORE=0
+    #     OFFSET=0
+    #     
+    #     if [ "$inst_id" -lt "$REMAINING_CORES" ]; then
+    #         EXTRA_CORE=1
+    #         OFFSET="$inst_id"
+    #     else
+    #         EXTRA_CORE=0
+    #         OFFSET="$REMAINING_CORES"
+    #     fi
+    #
+    #     CORE_START="$((CORES_PER_INST * inst_id + OFFSET))"
+    #     CORE_END="$((CORE_START + CORES_PER_INST + EXTRA_CORE - 1))"
+    #     
+    #     # Collect all CPUs (including SMT siblings) for the assigned physical cores
+    #     cpu_list=()
+    #     for ((i=CORE_START; i<=CORE_END; i++)); do
+    #         core_id="${physical_cores[$i]}"
+    #         # Split comma-separated thread list and add each CPU
+    #         IFS=',' read -ra threads <<< "${core_to_threads[$core_id]}"
+    #         cpu_list+=("${threads[@]}")
+    #     done
+    #     
+    #     # Sort CPUs numerically for cleaner output
+    #     IFS=$'\n' sorted_cpus=($(sort -n <<<"${cpu_list[*]}"))
+    #     unset IFS
+    #     
+    #     # Build compact CPU range string
+    #     RES=$(echo "${sorted_cpus[@]}" | tr ' ' ',' | sed 's/,$//')
+    #     
+    #     # Calculate number of logical CPUs
+    #     NUM_LOGICAL_CPUS="${#cpu_list[@]}"
+    #     
+    #     # Create compact display string for logging
+    #     DISPLAY_RANGE="${sorted_cpus[0]}-${sorted_cpus[-1]}"
+    # else
+    
+    # Use simple CPU allocation based on nproc (works in containers and bare metal)
+    
     if [ "$has_smt" -eq 1 ]; then
         NCORES="$((NPROC / 2))"
     else
         NCORES="$NPROC"
     fi
+    
     CORES_PER_INST="$((NCORES / total_instances))"
     REMAINING_CORES="$((NCORES - CORES_PER_INST * total_instances))"
     EXTRA_CORE=0
     OFFSET=0
+    
     if [ "$inst_id" -lt "$REMAINING_CORES" ]; then
         EXTRA_CORE=1
         OFFSET="$inst_id"
@@ -93,28 +221,40 @@ function get_cpu_range() {
     PHY_CORE_BASE="$((CORES_PER_INST * inst_id + OFFSET))"
     PHY_CORE_END="$((PHY_CORE_BASE + CORES_PER_INST + EXTRA_CORE - 1))"
 
+    # Calculate number of logical CPUs (physical cores * threads per core)
+    NUM_PHYSICAL_CORES="$((CORES_PER_INST + EXTRA_CORE))"
+    if [ "$has_smt" -eq 1 ]; then
+        NUM_LOGICAL_CPUS="$((NUM_PHYSICAL_CORES * 2))"
+    else
+        NUM_LOGICAL_CPUS="$NUM_PHYSICAL_CORES"
+    fi
+
     RES="${PHY_CORE_BASE}-${PHY_CORE_END}"
     if [ "$has_smt" -eq 1 ]; then
         SMT_BASE="$((NPROC / 2 + CORES_PER_INST * inst_id + OFFSET))"
         SMT_END="$((SMT_BASE + CORES_PER_INST + EXTRA_CORE - 1))"
         RES="${RES},${SMT_BASE}-${SMT_END}"
     fi
+    
+    DISPLAY_RANGE="$RES"
 
-    log_message "$RES"
+    log_message "Instance $((inst_id + 1)): CPUs ${DISPLAY_RANGE} (${NUM_LOGICAL_CPUS} logical CPUs)"
+    
+    # Return values by setting the passed variable names
+    eval $__resultvar_range="'$RES'"
+    eval $__resultvar_cpus="'$NUM_LOGICAL_CPUS'"
 }
 
 
 # shellcheck disable=SC2086
 for i in $(seq 1 ${NUM_INSTANCES}); do
-    CORE_RANGE="$(get_cpu_range "${NUM_INSTANCES}" "$((i - 1))")"
-    CMD="IS_AUTOSCALE_RUN=${NUM_INSTANCES} taskset --cpu-list ${CORE_RANGE} ${FEEDSIM_ROOT}/run.sh -p ${PORT} -i ${NUM_ICACHE_ITERATIONS} -o  ${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt --inst-num ${i} $*"
+    get_cpu_range CORE_RANGE NUM_LOGICAL_CPUS "${NUM_INSTANCES}" "$((i - 1))"
+    CMD="IS_AUTOSCALE_RUN=${NUM_INSTANCES} DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} taskset --cpu-list ${CORE_RANGE} ${FEEDSIM_ROOT}/run.sh -p ${PORT} -i ${NUM_ICACHE_ITERATIONS} -o  ${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt --inst-num ${i} --num-logical-cpus ${NUM_LOGICAL_CPUS} $*"
     log_message "$CMD"
     echo "$CMD" > "${FEEDSIM_LOG_PREFIX}${i}.log"
     # shellcheck disable=SC2068,SC2069
-    IS_AUTOSCALE_RUN=${NUM_INSTANCES} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt" --inst-num "${i}" "$@" 2>&1 | tee -a "${FEEDSIM_LOG_PREFIX}${i}.log" &
+    IS_AUTOSCALE_RUN=${NUM_INSTANCES} DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt" --inst-num "${i}" --num-logical-cpus "${NUM_LOGICAL_CPUS}" "$@" 2>&1 | tee -a "${FEEDSIM_LOG_PREFIX}${i}.log" &
     PIDS+=("$!")
-    PHY_CORE_ID=$((PHY_CORE_ID + CORES_PER_INST))
-    SMT_ID=$((SMT_ID + CORES_PER_INST))
     PORT=$((PORT + 1))
 done
 

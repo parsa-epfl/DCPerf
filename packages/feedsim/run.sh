@@ -8,7 +8,11 @@ set -Eeo pipefail
 trap cleanup SIGINT SIGTERM ERR EXIT
 
 function log_message() {
-    echo -e "${1}"
+    local prefix=""
+    if [ -n "${IS_AUTOSCALE_RUN:-}" ] && [ "${IS_AUTOSCALE_RUN}" -gt 1 ] && [ -n "${INST_NUM:-}" ]; then
+        prefix="[${INST_NUM}] "
+    fi
+    echo -e "${prefix}${1}"
     if [ -z "$IS_AUTOSCALE_RUN" ]; then
         echo -e "${1}" >> "${FEEDSIM_ROOT}/LOGs/run.sh.log"
     fi
@@ -35,25 +39,6 @@ FEEDSIM_ROOT_SRC="${FEEDSIM_ROOT}/src"
 # DRIVER_THREADS: Driver Node threads
 # THRIFT_THREADS_DEFAULT: LeafNode Threads - Serialization, Deserialization
 
-# Thrift threads: scale with logical CPUs till 216. Having more than that
-# will risk running out of memory and getting killed
-IS_SMT_ON="$(cat /sys/devices/system/cpu/smt/active)"
-THRIFT_THREADS_DEFAULT="$(echo "${BC_MIN_FN}; min($(nproc), 216)" | bc)"
-EVENTBASE_THREADS_DEFAULT=4  # 4 should suffice. Tune up if threads are saturated.
-SRV_THREADS_DEFAULT=8        # 8 should also suffice for most purposes
-if [[ "$IS_SMT_ON" = 1 ]]; then
-  RANKING_THREADS_DEFAULT="$(( $(nproc) * 7/20))"  # 7/20 is 0.35 cpu factor
-  SRV_IO_THREADS_DEFAULT="$(echo "${BC_MIN_FN}; min($(nproc) * 7/20, 55)" | bc)" # 0.35 cpu factor, max 55
-  DRIVER_THREADS="$(echo "scale=2; $(nproc) / 5.0 + 0.5 " | bc )"  # Driver threads, rounds nearest.
-  DRIVER_THREADS="${DRIVER_THREADS%.*}"  # Truncate decimal fraction.
-  DRIVER_THREADS="$(echo "${BC_MAX_FN}; max(${DRIVER_THREADS:-0}, 4)" | bc )" # At least 4 threads.
-else
-  RANKING_THREADS_DEFAULT="$(( $(nproc) * 15/20))"  # 15/20 is 0.75 cpu factor
-  SRV_IO_THREADS_DEFAULT="$(echo "${BC_MIN_FN}; min($(nproc) * 11/20, 55)" | bc)" # 0.55 cpu factor, max 55
-  DRIVER_THREADS="$(echo "scale=2; $(nproc) / 4.0 + 0.5 " | bc )"  # Driver threads, rounds nearest.
-  DRIVER_THREADS="${DRIVER_THREADS%.*}"  # Truncate decimal fraction.
-  DRIVER_THREADS="$(echo "${BC_MAX_FN}; max(${DRIVER_THREADS:-0}, 4)" | bc )" # At least 4 threads.
-fi
 
 
 show_help() {
@@ -61,11 +46,9 @@ cat <<EOF
 Usage: ${0##*/} [OPTION]...
 
      -h Display this help and exit
-     -t Number of threads to use for thrift serving. Large dataset kept per thread. Default: $THRIFT_THREADS_DEFAULT
-     -c Number of threads to use for fanout ranking work. Heavy CPU work. Default: $RANKING_THREADS_DEFAULT
-     -s Number of threads to use for task-based serialization cpu work. Default: $SRV_IO_THREADS_DEFAULT
-     -a When searching for the optimal QPS, automatically adjust the number of client driver threads by
-         min(requested_qps / 4, $(nproc) / 5) in each iteration (experimental feature).
+     -t Number of threads to use for thrift serving. Large dataset kept per thread. Default: based on allocated CPUs
+     -c Number of threads to use for fanout ranking work. Heavy CPU work. Default: based on allocated CPUs
+     -s Number of threads to use for task-based serialization cpu work. Default: based on allocated CPUs
      -q Number of QPS to request. If this is present, feedsim will run a fixed-QPS experiment instead of searching
          for a QPS that meets latency target. If multiple comma-separated values are specified, a fixed-QPS experiment
          will be run for each QPS value.
@@ -75,7 +58,11 @@ Usage: ${0##*/} [OPTION]...
      -p Port to use by the LeafNodeRank server and the load drivers. Default: 11222
      -o Result output file name. Default: "feedsim_results.txt"
      --inst-num Instance number for multi-instance runs. Used for per-instance logging.
+     --num-logical-cpus Number of logical CPUs allocated to this instance. Affects default thread counts.
      --is-autoscale Set to non-zero for autoscale/multi-instance runs. Controls per-instance log file naming.
+     --no-auto-driver-threads Disable automatic driver thread adjustment. Uses fixed calculation based on allocated CPUs.
+         By default, driver threads are automatically adjusted per QPS iteration (auto mode).
+     --num-driver-threads Number of driver threads to use for load generation. This overrides auto mode.
 EOF
 }
 
@@ -126,6 +113,9 @@ monitor_leaf_stats() {
 
 
 main() {
+    MONITOR_PID=""
+    LEAF_PID=""
+    
     local thrift_threads
     thrift_threads="$THRIFT_THREADS_DEFAULT"
 
@@ -137,6 +127,9 @@ main() {
 
     local auto_driver_threads
     auto_driver_threads="1"
+
+    local driver_threads
+    driver_threads=""
 
     local fixed_qps
     fixed_qps=""
@@ -156,6 +149,9 @@ main() {
     local inst_num
     inst_num="0"
 
+    local num_logical_cpus
+    num_logical_cpus="$(nproc)"
+
     local result_filename
     result_filename="${FEEDSIM_ROOT}/result/feedsim_results.txt"
 
@@ -165,17 +161,6 @@ main() {
         rm -rf "${FEEDSIM_ROOT}/result"
         mkdir -p "${FEEDSIM_ROOT}/result"
     fi
-
-    log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD} \n"
-
-    log_message "IS_SMT_ON=${IS_SMT_ON}"
-    log_message "NCPU=$(nproc)"
-    log_message "THRIFT_THREADS_DEFAULT=${THRIFT_THREADS_DEFAULT}"
-    log_message "RANKING_THREADS_DEFAULT=${RANKING_THREADS_DEFAULT}"
-    log_message "SRV_IO_THREADS_DEFAULT=${SRV_IO_THREADS_DEFAULT}"
-    log_message "EVENTBASE_THREADS_DEFAULT=${EVENTBASE_THREADS_DEFAULT}"
-    log_message "SRV_THREADS_DEFAULT=${SRV_THREADS_DEFAULT}"
-    log_message "DRIVER_THREADS=${DRIVER_THREADS} \n"
 
     while [ $# -ne 0 ]; do
         case $1 in
@@ -187,9 +172,6 @@ main() {
                 ;;
             -s)
                 srv_io_threads="$2"
-                ;;
-            -a)
-                auto_driver_threads="1"
                 ;;
             -q)
                 fixed_qps="$2"
@@ -212,6 +194,15 @@ main() {
             --inst-num)
                 inst_num="$2"
                 ;;
+            --num-logical-cpus)
+                num_logical_cpus="$2"
+                ;;
+            --no-auto-driver-threads)
+                auto_driver_threads="0"
+                ;;
+            --num-driver-threads)
+                driver_threads="$2"
+                ;;
             -h|--help)
                 show_help >&2
                 exit 1
@@ -222,7 +213,7 @@ main() {
         esac
 
         case $1 in
-            -t|-c|-s|-d|-p|-q|-o|-w|-i|--inst-num)
+            -t|-c|-s|-d|-p|-q|-o|-w|-i|--inst-num|--num-logical-cpus|--num-driver-threads)
                 if [ -z "$2" ]; then
                     echo "Invalid option: '$1' requires an argument" 1>&2
                     exit 1
@@ -234,6 +225,47 @@ main() {
     done
 
     set -u  # Enable unbound variables check from here onwards
+
+    # Set global INST_NUM for use in log_message
+    INST_NUM="$inst_num"
+
+    # Calculate thread defaults based on allocated logical CPUs
+    # Thrift threads: scale with logical CPUs till 216. Having more than that
+    # will risk running out of memory and getting killed
+    IS_SMT_ON="$(cat /sys/devices/system/cpu/smt/active 2>/dev/null || echo 1)"
+    THRIFT_THREADS_DEFAULT="$(echo "${BC_MIN_FN}; min(${num_logical_cpus}, 216)" | bc)"
+    if [[ "$IS_SMT_ON" = 1 ]]; then
+      RANKING_THREADS_DEFAULT="$(( num_logical_cpus * 7/20 ))"  # 7/20 is 0.35 cpu factor
+      SRV_IO_THREADS_DEFAULT="$(echo "${BC_MIN_FN}; min(${num_logical_cpus} * 7/20, 55)" | bc)" # 0.35 cpu factor, max 55
+    else
+      RANKING_THREADS_DEFAULT="$(( num_logical_cpus * 15/20 ))"  # 15/20 is 0.75 cpu factor
+      SRV_IO_THREADS_DEFAULT="$(echo "${BC_MIN_FN}; min(${num_logical_cpus} * 11/20, 55)" | bc)" # 0.55 cpu factor, max 55
+    fi
+    EVENTBASE_THREADS_DEFAULT=4  # 4 should suffice. Tune up if threads are saturated.
+    SRV_THREADS_DEFAULT=8        # 8 should also suffice for most purposes
+
+    # Apply defaults if not explicitly set
+    if [ -z "${thrift_threads}" ] || [ "${thrift_threads}" = "$THRIFT_THREADS_DEFAULT" ]; then
+        thrift_threads="$THRIFT_THREADS_DEFAULT"
+    fi
+    if [ -z "${ranking_cpu_threads}" ] || [ "${ranking_cpu_threads}" = "$RANKING_THREADS_DEFAULT" ]; then
+        ranking_cpu_threads="$RANKING_THREADS_DEFAULT"
+    fi
+    if [ -z "${srv_io_threads}" ] || [ "${srv_io_threads}" = "$SRV_IO_THREADS_DEFAULT" ]; then
+        srv_io_threads="$SRV_IO_THREADS_DEFAULT"
+    fi
+
+    # Log configuration after calculating defaults
+    log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} \n"
+
+    log_message "IS_SMT_ON=${IS_SMT_ON}"
+    log_message "SYSTEM_TOTAL_CPUS=$(nproc)"
+    log_message "NUM_LOGICAL_CPUS_ALLOCATED=${num_logical_cpus}"
+    log_message "THRIFT_THREADS_DEFAULT=${THRIFT_THREADS_DEFAULT}"
+    log_message "RANKING_THREADS_DEFAULT=${RANKING_THREADS_DEFAULT}"
+    log_message "SRV_IO_THREADS_DEFAULT=${SRV_IO_THREADS_DEFAULT}"
+    log_message "EVENTBASE_THREADS_DEFAULT=${EVENTBASE_THREADS_DEFAULT}"
+    log_message "SRV_THREADS_DEFAULT=${SRV_THREADS_DEFAULT} \n"
 
     # Bring up services
     # 1. Leaf Node
@@ -254,6 +286,7 @@ main() {
     log_message "leaf_node_threads=${thrift_threads}"
     log_message "ranking_cpu_threads=${ranking_cpu_threads}"
     log_message "srv_io_threads=${srv_io_threads}"
+    log_message "num_logical_cpus_allocated=${num_logical_cpus}"
     log_message "leafnode_monitor_port-${inst_num}=${monitor_port}"
     log_message "inst_num=${inst_num} \n"
 
@@ -287,7 +320,7 @@ main() {
     MONITOR_LOG_FILE="${FEEDSIM_ROOT}/LOGs/LeafNodeStatsMonitor-${inst_num}.log"
     monitor_leaf_stats "$monitor_port" "$MONITOR_LOG_FILE" &
     MONITOR_PID=$!
-    echo "Starting LeafNode Stats Monitoring, logging to: $MONITOR_LOG_FILE (PID: $MONITOR_PID)"
+    log_message "Starting LeafNode Stats Monitoring, logging to: $MONITOR_LOG_FILE (PID: $MONITOR_PID)"
 
     # FIXME(cltorres)
     # Skip ParentNode for now, and talk directly to LeafNode
@@ -300,56 +333,46 @@ main() {
     client_monitor_port="$((monitor_port-1000))"
     log_message "drivernode_monitor_port-${inst_num}=${client_monitor_port} \n"
 
-    if [ -z "$fixed_qps" ] && [ "$auto_driver_threads" != "1" ]; then
+    # Determine thread configuration for search_qps.sh
+    local driver_thread_args=""
+    if [ -n "$driver_threads" ]; then
+        # Explicit driver threads specified with --num-driver-threads, passed as -n to search_qps.sh
+        driver_thread_args="-n ${driver_threads}"
+    elif [ "$auto_driver_threads" = "1" ]; then
+        # Auto mode enabled (default or via old -a flag if it existed)
+        driver_thread_args="-a"
+    fi
+    # If auto_driver_threads=0, pass nothing (search_qps.sh will use default calculation)
 
-        search_qps_cmd="scripts/search_qps.sh -w 15 -f 300 -s 95p:500 -o '${result_filename}' --inst-num '$inst_num' --is-autoscale '${IS_AUTOSCALE_RUN:-0}' -- \
+    # Build and execute search_qps command
+    if [ -z "$fixed_qps" ]; then
+        # QPS search mode
+        search_qps_cmd="DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} scripts/search_qps.sh ${driver_thread_args} -w 15 -f 300 \
+            -s 95p:500 \
+            -o '${result_filename}' \
+            --inst-num '$inst_num' \
+            --is-autoscale '${IS_AUTOSCALE_RUN:-0}' \
+            --num-logical-cpus '${num_logical_cpus}' -- \
             build/workloads/ranking/DriverNodeRank \
                 --server '0.0.0.0:$port' \
-                --monitor_port '$client_monitor_port' \
-                --threads='${DRIVER_THREADS}' \
-                --connections=4"
-        
-        log_message "Running search_qps: \n ${search_qps_cmd} \n"
-        eval "$search_qps_cmd"
-        log_message "Completed search_qps"
-
-    elif [ -z "$fixed_qps" ] && [ "$auto_driver_threads" = "1" ]; then
-        search_qps_cmd="scripts/search_qps.sh -a -w 15 -f 300 -s 95p:500 -o '${result_filename}' --inst-num '$inst_num' --is-autoscale '${IS_AUTOSCALE_RUN:-0}' -- \
-            build/workloads/ranking/DriverNodeRank \
-                --monitor_port '$client_monitor_port' \
-                --server '0.0.0.0:$port'"
+                --monitor_port '$client_monitor_port'"
         
         log_message "Running search_qps: \n ${search_qps_cmd} \n"
         eval "$search_qps_cmd"
         log_message "Completed search_qps"
     else
-        if [ "$auto_driver_threads" = "1" ]; then
-            # Use auto driver threads mode
-            search_qps_cmd="scripts/search_qps.sh -a -s 95p -t '$experiment_duration' \
-               -m '$warmup_time' \
-               -q '$fixed_qps' \
-               -o '${result_filename}' \
-               --inst-num '$inst_num' \
-               --is-autoscale '${IS_AUTOSCALE_RUN:-0}' \
-               -- build/workloads/ranking/DriverNodeRank \
-                    --server '0.0.0.0:$port' \
-                    --monitor_port '$client_monitor_port'"
-        else
-            # Use fixed DRIVER_THREADS
-            num_connections=4
-            num_workers=$DRIVER_THREADS
-            search_qps_cmd="scripts/search_qps.sh -s 95p -t '$experiment_duration' \
-               -m '$warmup_time' \
-               -q '$fixed_qps' \
-               -o '${result_filename}' \
-               --inst-num '$inst_num' \
-               --is-autoscale '${IS_AUTOSCALE_RUN:-0}' \
-               -- build/workloads/ranking/DriverNodeRank \
-                    --server '0.0.0.0:$port' \
-                    --monitor_port '$client_monitor_port' \
-                    --threads='${num_workers}' \
-                    --connections='${num_connections}'"
-        fi
+        # Fixed QPS mode
+        search_qps_cmd="DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} scripts/search_qps.sh ${driver_thread_args} \
+           -s 95p:500 -t '$experiment_duration' \
+           -m '$warmup_time' \
+           -q '$fixed_qps' \
+           -o '${result_filename}' \
+           --inst-num '$inst_num' \
+           --is-autoscale '${IS_AUTOSCALE_RUN:-0}' \
+           --num-logical-cpus '${num_logical_cpus}' \
+           -- build/workloads/ranking/DriverNodeRank \
+                --server '0.0.0.0:$port' \
+                --monitor_port '$client_monitor_port'"
         
         log_message "Running fixed_qps_exp: \n ${search_qps_cmd} \n"
         eval "$search_qps_cmd"

@@ -3,7 +3,7 @@
 # Copyright 2015 Google Inc. All Rights Reserved.
 # Copyright (c) Meta Platforms, Inc. and affiliates.
 #
-# Licensed under the Apache License, Version 2.0 (the "License");
+# Licensed under the Apache License, Version 2.0 (the "License");3261891
 # you may not use this file except in compliance with the License.
 # You may obtain a copy of the License at
 #
@@ -45,7 +45,11 @@ cleanup() {
 }
 
 function log_message() {
-    echo -e "${1}"
+    local prefix=""
+    if [ -n "${IS_AUTOSCALE_RUN}" ] && [ "${IS_AUTOSCALE_RUN}" -gt 1 ] && [ -n "${inst_num}" ]; then
+        prefix="[${inst_num}] "
+    fi
+    echo -e "${prefix}${1}"
     if [ -n "${IS_AUTOSCALE_RUN}" ] && [ "${IS_AUTOSCALE_RUN}" != "0" ]; then
         echo -e "${1}" >> "${FEEDSIM_ROOT}/LOGs/search_qps.sh.${inst_num}.log"
     else
@@ -54,6 +58,176 @@ function log_message() {
 }
 
 
+# Calculate driver threads based on specified value, auto mode, or default calculation
+# calculate_driver_threads resultvar req_qps
+# Returns thread count via pass-by-reference
+# Uses global max_driver_threads variable
+function calculate_driver_threads() {
+  local __resultvar=$1
+  local req_qps="$2"
+  local num_threads=""
+  
+  # Priority: specified (-n) > auto (-a) > default (calculated)
+  if [ -n "$specified_driver_threads" ]; then
+      # Use specified thread count from -n argument
+      num_threads="$specified_driver_threads"
+  else
+      if [ "$auto_driver_threads" = "1" ]; then
+          # Auto mode: adjust threads based on requested QPS
+          local num_connections=4
+          if [ -n "$req_qps" ]; then
+              num_threads=$(echo "$req_qps / $num_connections" | bc)
+              # Clamp between 1 and max_driver_threads
+              if [ "$num_threads" -lt 1 ]; then
+                  num_threads=1
+              elif [ "$num_threads" -gt "$max_driver_threads" ]; then
+                  num_threads="$max_driver_threads"
+              fi
+          else
+              num_threads=${max_driver_threads}
+          fi
+      else
+          # Default mode: use max_driver_threads
+          num_threads=${max_driver_threads}
+      fi
+  fi
+  
+  eval $__resultvar="'$num_threads'"
+}
+
+
+# Scale up max_driver_threads if bottleneck detected
+# scale_up_max_driver_threads resultvar current_threads current_max requested_qps measured_qps measured_latency
+function scale_up_max_driver_threads() {
+  local __resultvar=$1
+  local current_threads="$2"
+  local current_max="$3"
+  local requested_qps="$4"
+  local measured_qps="$5"
+  local measured_latency="$6"
+  local result_value="$current_max"
+  
+  # Only scale if we're at the ceiling
+  if [ "$current_threads" -lt "$MAX_DRIVER_THREADS_DEFAULT" ]; then
+      log_message "scale_up_max_driver_threads: Not at ceiling ($current_threads < $MAX_DRIVER_THREADS_DEFAULT), no scaling"
+      eval $__resultvar="'$result_value'"
+      return
+  fi
+  
+  # Determine QPS scaling factor
+  local qps_scaling_factor="1.0"
+  local qps_ratio=$(echo "scale=4; $measured_qps / $requested_qps" | bc)
+  
+  if [ "$(echo "$qps_ratio < 0.7" | bc)" = "1" ]; then
+      qps_scaling_factor="1.15"
+      # log_message "scale_up_max_driver_threads: QPS ratio ${qps_ratio} < 0.7, qps_scaling_factor: 1.15"
+  elif [ "$(echo "$qps_ratio < 0.8" | bc)" = "1" ]; then
+      qps_scaling_factor="1.10"
+      # log_message "scale_up_max_driver_threads: QPS ratio ${qps_ratio} < 0.8, qps_scaling_factor: 1.10"
+  elif [ "$(echo "$qps_ratio < 0.9" | bc)" = "1" ]; then
+      qps_scaling_factor="1.05"
+      # log_message "scale_up_max_driver_threads: QPS ratio ${qps_ratio} < 0.9, qps_scaling_factor: 1.05"
+  elif [ "$(echo "$qps_ratio < 0.95" | bc)" = "1" ]; then
+      qps_scaling_factor="1.02"
+      # log_message "scale_up_max_driver_threads: QPS ratio ${qps_ratio} < 0.95, qps_scaling_factor: 1.02"
+  else
+      log_message "scale_up_max_driver_threads: QPS ratio ${qps_ratio} >= 0.95, no scaling needed"
+      eval $__resultvar="'$result_value'"
+      return
+  fi
+  
+  # Determine latency scaling factor (use default 500ms if no target set)
+  local latency_scaling_factor="1.0"
+  local effective_latency_target="${latency_target:-500}"
+  
+  local latency_gap=$(echo "scale=4; $effective_latency_target - $measured_latency" | bc)
+  local threshold_15=$(echo "scale=4; $effective_latency_target * 0.15" | bc)
+  local threshold_10=$(echo "scale=4; $effective_latency_target * 0.10" | bc)
+  local threshold_05=$(echo "scale=4; $effective_latency_target * 0.05" | bc)
+  local threshold_03=$(echo "scale=4; $effective_latency_target * 0.03" | bc)
+  
+  if [ "$(echo "$latency_gap > $threshold_15" | bc)" = "1" ]; then
+      latency_scaling_factor="1.1"
+      # log_message "scale_up_max_driver_threads: Latency gap ${latency_gap} > 15% of target ($effective_latency_target), latency_scaling_factor: 1.1"
+  elif [ "$(echo "$latency_gap > $threshold_10" | bc)" = "1" ]; then
+      latency_scaling_factor="1.05"
+      # log_message "scale_up_max_driver_threads: Latency gap ${latency_gap} > 10% of target ($effective_latency_target), latency_scaling_factor: 1.05"
+  elif [ "$(echo "$latency_gap > $threshold_05" | bc)" = "1" ]; then
+      latency_scaling_factor="1.02"
+      # log_message "scale_up_max_driver_threads: Latency gap ${latency_gap} > 5% of target ($effective_latency_target), latency_scaling_factor: 1.02"
+  elif [ "$(echo "$latency_gap > $threshold_03" | bc)" = "1" ]; then
+      latency_scaling_factor="1.01"
+      # log_message "scale_up_max_driver_threads: Latency gap ${latency_gap} > 3% of target ($effective_latency_target), latency_scaling_factor: 1.01"
+  else
+      log_message "scale_up_max_driver_threads: Insufficient latency headroom (gap: $latency_gap <= 3% of $effective_latency_target), no latency-based scaling"
+      eval $__resultvar="'$result_value'"
+      return
+  fi
+  
+  # Calculate combined scaling factor
+  local scale_factor=$(echo "scale=4; $qps_scaling_factor * $latency_scaling_factor" | bc)
+    
+  # Scale up the ceiling
+  result_value=$(echo "scale=0; $current_max * $scale_factor / 1" | bc)
+  # log_message "scale_up_max_driver_threads: Scaling max_driver_threads from $current_max to $result_value"
+  
+  eval $__resultvar="'$result_value'"
+}
+
+
+# Run loadtest with adaptive scaling of driver threads
+# run_loadtest_with_adaptive_scaling output_qps output_latency target_qps
+function run_loadtest_with_adaptive_scaling() {
+  local __output_qps=$1
+  local __output_latency=$2
+  local target_qps="$3"
+  local max_retries=5
+  local retry_count=0
+  local current_max_driver_threads="$max_driver_threads"
+  local result_qps=""
+  local result_latency=""
+  
+  while [ $retry_count -lt $max_retries ]; do
+      # Calculate driver threads with current ceiling
+      local driver_threads=""
+      max_driver_threads="$current_max_driver_threads"
+      calculate_driver_threads driver_threads "$target_qps"
+      
+      # Run the loadtest
+      result_qps=""
+      result_latency=""
+      run_loadtest result_qps result_latency "$driver_threads" "$target_qps"
+      
+      # Only attempt adaptive scaling if auto mode is enabled
+      if [ "$auto_driver_threads" != "1" ]; then
+          break
+      fi
+      
+      # Attempt to scale up (scale_up function will validate if scaling is needed)
+      local new_max=""
+      scale_up_max_driver_threads new_max "$driver_threads" "$current_max_driver_threads" "$target_qps" "$result_qps" "$result_latency"
+      
+      # Check if scaling actually happened
+      if [ "$new_max" = "$current_max_driver_threads" ]; then
+          break
+      fi
+      
+      log_message "run_loadtest_with_adaptive_scaling: Iteration $((retry_count+1)): Scaling max from $current_max_driver_threads to $new_max"
+      current_max_driver_threads="$new_max"
+      retry_count=$((retry_count + 1))
+  done
+  
+  if [ $retry_count -ge $max_retries ]; then
+      log_message "run_loadtest_with_adaptive_scaling: Reached max retries ($max_retries), stopping"
+  fi
+  
+  # Update global max_driver_threads if it changed
+  max_driver_threads="$current_max_driver_threads"
+  
+  # Return final results
+  eval $__output_qps="'$result_qps'"
+  eval $__output_latency="'$result_latency'"
+}
 
 
 
@@ -118,12 +292,15 @@ mutilate (EuroSys \'14) [https://github.com/leverich/mutilate]
         are avg, 50p, 90p, 95p, 99p, 99.9p
   -q          number of qps to use. If this option is present, the program will execute
         a fixed-qps experiment instead of searching. Optional
+  -n          specified number of driver threads to use. Overrides -a and default number of threads.
   -a          let ${0##*/} automatically adjust the number of driver's worker threads by
         appending '--threads=T --connections=4' to the driver command during load
-        tests. T will be the lesser of requested_qps / 4 or $(nproc) / 5.
+        tests. T will be the lesser of requested_qps / 4 or allocated_cpus / 5.
   -o          output filename to record samples as csv. Optional
   --inst-num  Instance number for multi-instance runs. Used for per-instance logging.
   --is-autoscale Set to non-zero for autoscale/multi-instance runs. Controls per-instance log file naming.
+  --num-logical-cpus Number of logical CPUs allocated to this instance. Used to calculate
+        default driver threads when neither -n nor -a is specified. Default: $(nproc)
 EOF
 }
 
@@ -153,47 +330,17 @@ monitor_driver_stats() {
 
 
 # Run the load test and pull results
-# run_loadtest output_qps output_latency [target qps]
+# run_loadtest output_qps output_latency num_threads [target qps]
 run_loadtest() {
   local __output_qps=$1
   local __output_latency=$2
+  local num_threads=$3
   local qps_arg=""
-  local threads_arg=""
+  local threads_arg="--threads=$num_threads --connections=4"
 
   # check for optional QPS argument
-  if [ $# -eq 3 ]; then
-    qps_arg="--qps=$3"
-  fi
-
-
-  # check if we want auto-adjusted worker thread counts
-  if [ "$auto_driver_threads" = "1" ]; then
-      local max_driver_threads=""
-      local req_qps="$3"
-      local num_connections=4
-      local num_threads=""
-      bc_max='define max (a, b) { if (a >= b) return (a); return (b); }'
-      local is_smt_on="$(cat /sys/devices/system/cpu/smt/active 2>/dev/null || echo 1)"
-      if [[ "$is_smt_on" = 1 ]]; then
-          max_driver_threads="$(echo "scale=2; $(nproc) / 5.0 + 0.5 " | bc )"
-      else
-          max_driver_threads="$(echo "scale=2; $(nproc) / 4.0 + 0.5 " | bc )"
-      fi
-      max_driver_threads="${max_driver_threads%.*}"
-      max_driver_threads="$(echo "${bc_max}; max(${max_driver_threads:-0}, 4)" | bc )" # At least 4 threads.
-
-      if [ -n "$req_qps" ]; then
-          num_threads=$(echo "$req_qps / $num_connections" | bc)
-      else
-          num_threads=${max_driver_threads}
-      fi
-      if [ "$num_threads" -lt 1 ]; then
-          num_threads=1
-      elif [ "$num_threads" -gt "$max_driver_threads" ]; then
-          num_threads="$max_driver_threads"
-      fi
-      threads_arg="--threads=$num_threads --connections=4"
-      log_message "run_loadtest: Auto driver threads enabled: using $num_threads threads for requested QPS $req_qps"
+  if [ $# -eq 4 ]; then
+    qps_arg="--qps=$4"
   fi
 
   log_message "run_loadtest: $run_load_type: command: $command $threads_arg $qps_arg"
@@ -224,7 +371,7 @@ run_loadtest() {
       fi      
       monitor_driver_stats "$monitor_port" "$monitor_log_file" &
       MONITOR_PID=$!
-      log_message "Starting DriverNode Stats Monitoring, logging to: $monitor_log_file (PID: $MONITOR_PID)"
+      log_message "DriverNode Stats Monitoring, logging to: $monitor_log_file (PID: $MONITOR_PID)"
     fi
   fi
 
@@ -239,7 +386,6 @@ run_loadtest() {
   if [ -n "$MONITOR_PID" ]; then
     kill -SIGTERM $MONITOR_PID 2>/dev/null || true
     wait $MONITOR_PID 2>/dev/null || true
-    log_message "Stopped DriverNode Stats Monitoring (PID: $MONITOR_PID)"
     MONITOR_PID=""
   fi
 
@@ -329,11 +475,13 @@ load_test_retries=3
 output_csv_file=""
 fixed_qps=""
 auto_driver_threads=""
+specified_driver_threads=""
+num_logical_cpus="$(nproc)"
 inst_num=""
 is_autoscale="${IS_AUTOSCALE_RUN:-}"
 
 OPTIND=1 # Reset is necessary if getopts was used previously in the script.  It is a good idea to make this local in a function.
-while getopts "ht:f:w:m:s:q:ao:-:" opt; do
+while getopts "ht:f:w:m:s:q:an:o:-:" opt; do
   case "$opt" in
     h)
       show_help
@@ -361,6 +509,9 @@ while getopts "ht:f:w:m:s:q:ao:-:" opt; do
     a)
       auto_driver_threads=1
       ;;
+    n)
+      specified_driver_threads=$OPTARG
+      ;;
     o)
       output_csv_file=$OPTARG
       ;;
@@ -371,6 +522,9 @@ while getopts "ht:f:w:m:s:q:ao:-:" opt; do
           ;;
         is-autoscale)
           IS_AUTOSCALE_RUN="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
+          ;;
+        num-logical-cpus)
+          num_logical_cpus="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         *)
           echo "Unknown option --$OPTARG" >&2
@@ -392,7 +546,7 @@ if [ -z "$warmup_time" ]; then
 fi
 
 SCRIPT_NAME="$(basename "$0")"
-log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD}"
+log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0}"
 
 
 
@@ -469,6 +623,20 @@ log_message "command: $command \n"
 
 
 
+# Calculate MAX_DRIVER_THREADS_DEFAULT based on allocated CPUs
+IS_SMT_ON="$(cat /sys/devices/system/cpu/smt/active 2>/dev/null || echo 1)"
+bc_max='define max (a, b) { if (a >= b) return (a); return (b); }'
+if [[ "$IS_SMT_ON" = 1 ]]; then
+    MAX_DRIVER_THREADS_DEFAULT="$(echo "scale=2; ${num_logical_cpus} / 5.0 + 0.5 " | bc )"
+else
+    MAX_DRIVER_THREADS_DEFAULT="$(echo "scale=2; ${num_logical_cpus} / 4.0 + 0.5 " | bc )"
+fi
+MAX_DRIVER_THREADS_DEFAULT="${MAX_DRIVER_THREADS_DEFAULT%.*}"
+MAX_DRIVER_THREADS_DEFAULT="$(echo "${bc_max}; max(${MAX_DRIVER_THREADS_DEFAULT:-0}, 4)" | bc )"
+max_driver_threads="$MAX_DRIVER_THREADS_DEFAULT"
+log_message "MAX_DRIVER_THREADS_DEFAULT: $MAX_DRIVER_THREADS_DEFAULT (based on ${num_logical_cpus} CPUs, SMT: $IS_SMT_ON)"
+
+
 
 
 # warm-up trials
@@ -477,7 +645,8 @@ if [ "$warmup_time" -gt 0 ]; then
   experiment_time="$warmup_time"
   run_load_type="WARMUP"
   log_message "WARMUP STARTED"
-  run_loadtest peak_qps measured_latency
+  calculate_driver_threads driver_threads ""
+  run_loadtest peak_qps measured_latency "$driver_threads"
   log_message "WARMUP COMPLETED"
   log_message "$(printf "warmup qps = %.2f, latency = %.2f" $peak_qps $measured_latency)\n"
   experiment_time="$saved_experiment_time"
@@ -497,7 +666,7 @@ if [[ -n "$fixed_qps" ]]; then
     fi
     run_load_type="EXPERIMENT"
     log_message "EXPERIMENT STARTED"
-    run_loadtest measured_qps measured_latency $fixed_qps
+    run_loadtest_with_adaptive_scaling measured_qps measured_latency $fixed_qps
     log_message "EXPERIMENT COMPLETED"
     log_message "$(printf "final requested_qps = %.2f, measured_qps = %.2f, latency = %.2f" $fixed_qps $measured_qps $measured_latency) \n"
 
@@ -506,7 +675,7 @@ if [[ -n "$fixed_qps" ]]; then
     for fixed_qps_el in $fixed_qps_array; do
       run_load_type="EXPERIMENT-${fixed_qps_el}"
       log_message "EXPERIMENT STARTED. QPS: ${fixed_qps_el}"
-      run_loadtest measured_qps measured_latency $fixed_qps_el
+      run_loadtest_with_adaptive_scaling measured_qps measured_latency $fixed_qps_el
       log_message "EXPERIMENT COMPLETED. QPS: ${fixed_qps_el}"
       log_message "$(printf "final requested_qps = %.2f, measured_qps = %.2f, latency = %.2f" $fixed_qps_el $measured_qps $measured_latency) \n"
     done
@@ -521,7 +690,8 @@ fi
 # find peak QPS
 log_message "PEAK QPS STARTED"
 run_load_type="PEAK-QPS"
-run_loadtest peak_qps measured_latency
+calculate_driver_threads driver_threads ""
+run_loadtest peak_qps measured_latency "$driver_threads"
 log_message "PEAK QPS COMPLETED"
 log_message "$(printf "peak qps = %.2f, latency = %.2f" $peak_qps $measured_latency)"
 
@@ -551,7 +721,7 @@ while [[ $loop_cond -eq 1 ]]; do
   # run experiment and report result
   run_load_type="BINARY-SEARCH-${cur_qps}"
   log_message "BINARY SEARCH ${cur_qps} STARTED"
-  run_loadtest measured_qps measured_latency $cur_qps
+  run_loadtest_with_adaptive_scaling measured_qps measured_latency $cur_qps
   log_message "BINARY SEARCH ${cur_qps} COMPLETED"
   log_message "$(printf "requested_qps = %.2f, measured_qps = %.2f, latency = %.2f\n" $cur_qps $measured_qps $measured_latency)"
 
@@ -600,7 +770,8 @@ while [[ $loop_cond -eq 1 ]]; do
   # run experiment and report result
   run_load_type="FINE-TUNING-${cur_qps}"
   log_message "FINE TUNING ${cur_qps} STARTED"
-  run_loadtest measured_qps measured_latency $cur_qps
+  calculate_driver_threads driver_threads "$cur_qps"
+  run_loadtest measured_qps measured_latency "$driver_threads" $cur_qps
   log_message "FINE TUNING ${cur_qps} COMPLETED"
   log_message "$(printf "requested_qps = %.2f, measured_qps = %.2f, latency = %.2f" $cur_qps $measured_qps $measured_latency)\n"
 
@@ -621,7 +792,8 @@ while [[ $loop_cond -eq 1 ]]; do
   # run experiment and report result
   run_load_type="GAP-TUNING-${cur_qps}"
   log_message "GAP TUNING ${cur_qps} STARTED"
-  run_loadtest measured_qps measured_latency $cur_qps
+  calculate_driver_threads driver_threads "$cur_qps"
+  run_loadtest measured_qps measured_latency "$driver_threads" $cur_qps
   log_message "GAP TUNING ${cur_qps} COMPLETED"
   log_message "$(printf "requested_qps = %.2f, measured_qps = %.2f, latency = %.2f" $cur_qps $measured_qps $measured_latency)"
 
@@ -658,7 +830,8 @@ if [ "${DCPERF_PERF_RECORD}" = 1 ] && ! [ -f "${FEEDSIM_ROOT}/result/perf.data" 
     PERF_PID=$!
 fi
 run_load_type="FINAL-MEASUREMENT"
-run_loadtest measured_qps measured_latency $cur_qps
+calculate_driver_threads driver_threads "$cur_qps"
+run_loadtest measured_qps measured_latency "$driver_threads" $cur_qps
 log_message "FINAL MEASUREMENT COMPLETED"
 log_message "$(printf "final requested_qps = %.2f, measured_qps = %.2f, latency = %.2f" $cur_qps $measured_qps $measured_latency)"
 

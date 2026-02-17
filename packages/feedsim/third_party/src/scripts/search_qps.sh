@@ -299,8 +299,6 @@ mutilate (EuroSys \'14) [https://github.com/leverich/mutilate]
   -o          output filename to record samples as csv. Optional
   --inst-num  Instance number for multi-instance runs. Used for per-instance logging.
   --is-autoscale Set to non-zero for autoscale/multi-instance runs. Controls per-instance log file naming.
-  --num-logical-cpus Number of logical CPUs allocated to this instance. Used to calculate
-        default driver threads when neither -n nor -a is specified. Default: $(nproc)
 EOF
 }
 
@@ -476,7 +474,6 @@ output_csv_file=""
 fixed_qps=""
 auto_driver_threads=""
 specified_driver_threads=""
-num_logical_cpus="$(nproc)"
 inst_num=""
 is_autoscale="${IS_AUTOSCALE_RUN:-}"
 
@@ -522,9 +519,6 @@ while getopts "ht:f:w:m:s:q:an:o:-:" opt; do
           ;;
         is-autoscale)
           IS_AUTOSCALE_RUN="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
-          ;;
-        num-logical-cpus)
-          num_logical_cpus="${!OPTIND}"; OPTIND=$(( $OPTIND + 1 ))
           ;;
         *)
           echo "Unknown option --$OPTARG" >&2
@@ -627,14 +621,14 @@ log_message "command: $command \n"
 IS_SMT_ON="$(cat /sys/devices/system/cpu/smt/active 2>/dev/null || echo 1)"
 bc_max='define max (a, b) { if (a >= b) return (a); return (b); }'
 if [[ "$IS_SMT_ON" = 1 ]]; then
-    MAX_DRIVER_THREADS_DEFAULT="$(echo "scale=2; ${num_logical_cpus} / 5.0 + 0.5 " | bc )"
+    MAX_DRIVER_THREADS_DEFAULT="$(echo "scale=2; $(nproc) / 5.0 + 0.5 " | bc )"
 else
-    MAX_DRIVER_THREADS_DEFAULT="$(echo "scale=2; ${num_logical_cpus} / 4.0 + 0.5 " | bc )"
+    MAX_DRIVER_THREADS_DEFAULT="$(echo "scale=2; $(nproc) / 4.0 + 0.5 " | bc )"
 fi
 MAX_DRIVER_THREADS_DEFAULT="${MAX_DRIVER_THREADS_DEFAULT%.*}"
 MAX_DRIVER_THREADS_DEFAULT="$(echo "${bc_max}; max(${MAX_DRIVER_THREADS_DEFAULT:-0}, 4)" | bc )"
 max_driver_threads="$MAX_DRIVER_THREADS_DEFAULT"
-log_message "MAX_DRIVER_THREADS_DEFAULT: $MAX_DRIVER_THREADS_DEFAULT (based on ${num_logical_cpus} CPUs, SMT: $IS_SMT_ON)"
+log_message "MAX_DRIVER_THREADS_DEFAULT: $MAX_DRIVER_THREADS_DEFAULT (based on $(nproc) CPUs, SMT: $IS_SMT_ON)"
 
 
 

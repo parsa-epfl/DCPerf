@@ -71,9 +71,8 @@ PIDS=()
 
 function get_cpu_range() {
     local __resultvar_range=$1
-    local __resultvar_cpus=$2
-    local total_instances="$3"
-    local inst_id="$4"
+    local total_instances="$2"
+    local inst_id="$3"
 
     # Note: this assumes that SMT is either fully enabled or fully disabled. Odd number of total logical CPUs is not supported.
     # Also assumes that each physical core has 2 threads when SMT is enabled.
@@ -221,14 +220,6 @@ function get_cpu_range() {
     PHY_CORE_BASE="$((CORES_PER_INST * inst_id + OFFSET))"
     PHY_CORE_END="$((PHY_CORE_BASE + CORES_PER_INST + EXTRA_CORE - 1))"
 
-    # Calculate number of logical CPUs (physical cores * threads per core)
-    NUM_PHYSICAL_CORES="$((CORES_PER_INST + EXTRA_CORE))"
-    if [ "$has_smt" -eq 1 ]; then
-        NUM_LOGICAL_CPUS="$((NUM_PHYSICAL_CORES * 2))"
-    else
-        NUM_LOGICAL_CPUS="$NUM_PHYSICAL_CORES"
-    fi
-
     RES="${PHY_CORE_BASE}-${PHY_CORE_END}"
     if [ "$has_smt" -eq 1 ]; then
         SMT_BASE="$((NPROC / 2 + CORES_PER_INST * inst_id + OFFSET))"
@@ -238,22 +229,21 @@ function get_cpu_range() {
     
     DISPLAY_RANGE="$RES"
 
-    log_message "Instance $((inst_id + 1)): CPUs ${DISPLAY_RANGE} (${NUM_LOGICAL_CPUS} logical CPUs)"
+    log_message "Instance $((inst_id + 1)): CPUs ${DISPLAY_RANGE}"
     
     # Return values by setting the passed variable names
     eval $__resultvar_range="'$RES'"
-    eval $__resultvar_cpus="'$NUM_LOGICAL_CPUS'"
 }
 
 
 # shellcheck disable=SC2086
 for i in $(seq 1 ${NUM_INSTANCES}); do
-    get_cpu_range CORE_RANGE NUM_LOGICAL_CPUS "${NUM_INSTANCES}" "$((i - 1))"
-    CMD="IS_AUTOSCALE_RUN=${NUM_INSTANCES} DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} taskset --cpu-list ${CORE_RANGE} ${FEEDSIM_ROOT}/run.sh -p ${PORT} -i ${NUM_ICACHE_ITERATIONS} -o  ${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt --inst-num ${i} --num-logical-cpus ${NUM_LOGICAL_CPUS} $*"
+    get_cpu_range CORE_RANGE "${NUM_INSTANCES}" "$((i - 1))"
+    CMD="IS_AUTOSCALE_RUN=${NUM_INSTANCES} DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} taskset --cpu-list ${CORE_RANGE} ${FEEDSIM_ROOT}/run.sh -p ${PORT} -i ${NUM_ICACHE_ITERATIONS} -o  ${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt --inst-num ${i} $*"
     log_message "$CMD"
     echo "$CMD" > "${FEEDSIM_LOG_PREFIX}${i}.log"
     # shellcheck disable=SC2068,SC2069
-    IS_AUTOSCALE_RUN=${NUM_INSTANCES} DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt" --inst-num "${i}" --num-logical-cpus "${NUM_LOGICAL_CPUS}" "$@" 2>&1 | tee -a "${FEEDSIM_LOG_PREFIX}${i}.log" &
+    IS_AUTOSCALE_RUN=${NUM_INSTANCES} DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} stdbuf -i0 -o0 -e0 taskset --cpu-list "${CORE_RANGE}" "${FEEDSIM_ROOT}"/run.sh -p "${PORT}" -i "${NUM_ICACHE_ITERATIONS}" -o "${FEEDSIM_ROOT}/result/feedsim_results-${i}.txt" --inst-num "${i}" "$@" 2>&1 | tee -a "${FEEDSIM_LOG_PREFIX}${i}.log" &
     PIDS+=("$!")
     PORT=$((PORT + 1))
 done

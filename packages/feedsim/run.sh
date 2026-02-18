@@ -31,6 +31,11 @@ BC_MIN_FN='define min (a, b) { if (a <= b) return (a); return (b); }'
 FEEDSIM_ROOT=$(cd "$(dirname "${BASH_SOURCE[0]}")" &>/dev/null && pwd -P)
 FEEDSIM_ROOT_SRC="${FEEDSIM_ROOT}/src"
 
+# Delete and recreate LOGs directory
+rm -rf "${FEEDSIM_ROOT}/LOGs"
+mkdir -p "${FEEDSIM_ROOT}/LOGs"
+rm -rf "${FEEDSIM_ROOT}/result"
+mkdir -p "${FEEDSIM_ROOT}/result"
 
 
 show_help() {
@@ -280,7 +285,7 @@ main() {
     log_message "leafnode_monitor_port-${inst_num}=${monitor_port}"
     log_message "inst_num=${inst_num} \n"
 
-    leaf_node_cmd="$server_taskset_prefix MALLOC_CONF=narenas:20,dirty_decay_ms:5000 build/workloads/ranking/LeafNodeRank \
+    leaf_node_cmd="$server_taskset_prefix env MALLOC_CONF=narenas:20,dirty_decay_ms:5000 build/workloads/ranking/LeafNodeRank \
         --port='$port' \
         --monitor_port='$monitor_port' \
         --graph_scale=21 \
@@ -343,7 +348,7 @@ main() {
     # Build and execute search_qps command
     if [ -z "$fixed_qps" ]; then
         # QPS search mode
-        search_qps_cmd="$client_taskset_prefix DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} scripts/search_qps.sh ${driver_thread_args} -w 15 -f 300 \
+        search_qps_cmd="$client_taskset_prefix env DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} scripts/search_qps.sh ${driver_thread_args} -w 15 -f 300 \
             -s 95p:500 \
             -o '${result_filename}' \
             --inst-num '$inst_num' \
@@ -357,7 +362,7 @@ main() {
         log_message "Completed search_qps"
     else
         # Fixed QPS mode
-        search_qps_cmd="$client_taskset_prefix DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} scripts/search_qps.sh ${driver_thread_args} \
+        search_qps_cmd="$client_taskset_prefix env DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} scripts/search_qps.sh ${driver_thread_args} \
            -s 95p:500 -t '$experiment_duration' \
            -m '$warmup_time' \
            -q '$fixed_qps' \

@@ -57,15 +57,18 @@ RUN apt-get update -qq && \
 ENV IS_AUTOSCALE_RUN=0
 
 # Required thread configuration variables (set defaults, override at runtime)
-ENV THRIFT_THREADS=1
-ENV RANKING_THREADS=1
-ENV SRV_IO_THREADS=1
+ENV THRIFT_THREADS=3
+ENV RANKING_THREADS=3
+ENV SRV_IO_THREADS=3
+# Optional thread configuration with defaults
+ENV EVENTBASE_THREADS=4
+ENV SRV_THREADS=8
 ENV DRIVER_THREADS=1
 
 # Optional duration and QPS configuration
 ENV WARMUP_DURATION=10
 ENV FIXED_QPS_DURATION=300
-ENV FIXED_QPS=10
+ENV FIXED_QPS=4
 
 # Optional CPU affinity configuration
 ENV SERVER_NODE_CPUS="0"

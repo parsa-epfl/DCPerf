@@ -46,6 +46,8 @@ Configuration is primarily done through environment variables:
     THRIFT_THREADS       - Number of threads for thrift serving (required)
     RANKING_THREADS      - Number of threads for fanout ranking work (required)
     SRV_IO_THREADS       - Number of threads for task-based serialization (required)
+    EVENTBASE_THREADS    - Number of IO TimeSleep threads (default: 4)
+    SRV_THREADS          - Number of pointer chasing threads (default: 8)
     DRIVER_THREADS       - Number of driver threads (optional, uses auto mode if not set)
     WARMUP_DURATION      - Warmup duration in seconds (default: 120)
     FIXED_QPS_DURATION   - Duration of fixed-QPS experiments in seconds (default: 300)
@@ -133,6 +135,12 @@ main() {
 
     local srv_io_threads
     srv_io_threads="${SRV_IO_THREADS:-}"
+
+    local eventbase_threads
+    eventbase_threads="${EVENTBASE_THREADS:-4}"
+
+    local srv_threads
+    srv_threads="${SRV_THREADS:-8}"
 
     local auto_driver_threads
     auto_driver_threads="1"
@@ -243,10 +251,6 @@ main() {
         die "SRV_IO_THREADS environment variable must be set"
     fi
 
-    # Set constants for eventbase and srv threads (these remain as constants)
-    EVENTBASE_THREADS_DEFAULT=4  # 4 should suffice. Tune up if threads are saturated.
-    SRV_THREADS_DEFAULT=8        # 8 should also suffice for most purposes
-
     # Log configuration
     log_message "${SCRIPT_NAME}: DCPERF_PERF_RECORD=${DCPERF_PERF_RECORD:-0} \n"
 
@@ -254,8 +258,8 @@ main() {
     log_message "THRIFT_THREADS=${thrift_threads}"
     log_message "RANKING_THREADS=${ranking_cpu_threads}"
     log_message "SRV_IO_THREADS=${srv_io_threads}"
-    log_message "EVENTBASE_THREADS_DEFAULT=${EVENTBASE_THREADS_DEFAULT}"
-    log_message "SRV_THREADS_DEFAULT=${SRV_THREADS_DEFAULT} \n"
+    log_message "EVENTBASE_THREADS=${eventbase_threads}"
+    log_message "SRV_THREADS=${srv_threads} \n"
 
     # Bring up services
     # 1. Leaf Node
@@ -293,8 +297,8 @@ main() {
         --threads='$thrift_threads' \
         --cpu_threads='$ranking_cpu_threads' \
         --timekeeper_threads=2 \
-        --io_threads='$EVENTBASE_THREADS_DEFAULT' \
-        --srv_threads='$SRV_THREADS_DEFAULT' \
+        --io_threads='$eventbase_threads' \
+        --srv_threads='$srv_threads' \
         --srv_io_threads='$srv_io_threads' \
         --num_objects=2000 \
         --graph_max_iters=1 \

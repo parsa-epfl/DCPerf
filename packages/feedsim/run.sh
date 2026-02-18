@@ -161,7 +161,7 @@ main() {
     port="11222"
 
     local icache_iterations
-    icache_iterations="1600000"
+    icache_iterations="400000"
 
     local inst_num
     inst_num="0"

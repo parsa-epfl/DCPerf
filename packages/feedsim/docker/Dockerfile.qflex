@@ -57,9 +57,9 @@ RUN apt-get update -qq && \
 ENV IS_AUTOSCALE_RUN=0
 
 # Required thread configuration variables (set defaults, override at runtime)
-ENV THRIFT_THREADS=3
-ENV RANKING_THREADS=3
-ENV SRV_IO_THREADS=3
+ENV THRIFT_THREADS=4
+ENV RANKING_THREADS=5
+ENV SRV_IO_THREADS=5
 # Optional thread configuration with defaults
 ENV EVENTBASE_THREADS=2
 ENV SRV_THREADS=2

@@ -1,0 +1,133 @@
+version: '3.8'
+
+services:
+  # Cassandra Database Server - Running on Core 0
+  cassandra-db:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile
+      target: db
+      args:
+        ARCH: ${ARCH:-x86_64}
+    image: akrishnaams/dcperf-djangobench-cassandra-${ARCH:-x86_64}:latest
+    container_name: django-cassandra-db
+    hostname: cassandra-db
+    networks:
+      - django-network
+    environment:
+      # Cassandra will bind to this IP (leave empty for auto-detection via hostname -i)
+      BIND_IP: ""
+    ports:
+      - "9042:9042"  # CQL native transport
+      - "7000:7000"  # Inter-node cluster
+      - "7199:7199"  # JMX monitoring
+    volumes:
+      # Optional: mount logs for debugging
+      - ./logs/cassandra:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    # CPU Affinity: Pin to Core 0
+    cpuset: "0"
+    # Resource limits (adjust based on your system)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '1.0'
+    #       memory: 8G
+    #     reservations:
+    #       cpus: '2.0'
+    #       memory: 4G
+
+  # Django Server - Running on Core 0
+  django-server:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile
+      target: server
+      args:
+        ARCH: ${ARCH:-x86_64}
+    image: akrishnaams/dcperf-djangobench-server-${ARCH:-x86_64}:latest
+    container_name: django-server
+    hostname: django-server
+    networks:
+      - django-network
+    depends_on:
+      cassandra-db:
+        condition: service_healthy
+    environment:
+      # Required: Cassandra database address (hostname or IP)
+      DB_ADDR: "cassandra-db"
+    ports:
+      - "8000:8000"  # Django/uWSGI
+    volumes:
+      # Mount directory for logs
+      - ./logs/django:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8000/"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    # CPU Affinity: Pin to Core 0
+    cpuset: "0"
+    # Resource limits (adjust based on your system)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '4.0'
+    #       memory: 8G
+    #     reservations:
+    #       cpus: '2.0'
+    #       memory: 4G
+
+  # Siege Client - Running on Core 1
+  siege-client:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile
+      target: client
+      args:
+        ARCH: ${ARCH:-x86_64}
+    image: akrishnaams/dcperf-djangobench-client-${ARCH:-x86_64}:latest
+    container_name: django-siege-client
+    hostname: siege-client
+    networks:
+      - django-network
+    depends_on:
+      django-server:
+        condition: service_healthy
+    environment:
+      # Required: Django server address (hostname or IP)
+      SERVER_ADDR: "django-server"
+      
+      # Optional: Number of benchmark iterations (default: 7)
+      ITERATIONS: ""
+      
+      # Optional: Fixed number of requests per iteration
+      # Leave empty to use default time-based benchmarking
+      REPS: ""
+    volumes:
+      # Mount directory for results
+      - ./results:/DCPerf/benchmarks/django_workload/results
+    # CPU Affinity: Pin to Core 1
+    cpuset: "1"
+    # Resource limits (adjust based on your system)
+    # deploy:
+    #   resources:
+    #     limits:
+    #       cpus: '4.0'
+    #       memory: 8G
+    #     reservations:
+    #       cpus: '2.0'
+    #       memory: 4G
+
+networks:
+  django-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16

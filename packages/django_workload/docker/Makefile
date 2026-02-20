@@ -35,6 +35,20 @@ build-server: ## Build only the Django server image
 build-client: ## Build only the Siege client image
 	$(COMPOSE) build siege-client
 
+push: ## Push all Docker images to registry
+	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest
+	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-server-$(ARCH):latest
+	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest
+
+push-db: ## Push only the Cassandra database image
+	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest
+
+push-server: ## Push only the Django server image
+	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-server-$(ARCH):latest
+
+push-client: ## Push only the Siege client image
+	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest
+
 up: ## Start all containers in detached mode
 	$(COMPOSE) up -d
 

@@ -58,9 +58,9 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
 # Use benchpress_cli.py as documented in README
 CMD ["sh", "-c", "BENCH_JOB=$([ \"${ARCH}\" = \"arm64\" ] || [ \"${ARCH}\" = \"aarch64\" ] && echo 'django_workload_arm' || echo 'django_workload_default'); \
     if [ -n \"${BIND_IP}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r db -i '{\"bind_ip\": \"'${BIND_IP}'\"}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r db -i '{\"bind_ip\": \"'${BIND_IP}'\"}'; \
     else \
-        ./benchpress_cli.py run $BENCH_JOB -r db; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r db; \
     fi"]
 
 
@@ -86,7 +86,7 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 
 # Use benchpress_cli.py as documented in README
 CMD ["sh", "-c", "BENCH_JOB=$([ \"${ARCH}\" = \"arm64\" ] || [ \"${ARCH}\" = \"aarch64\" ] && echo 'django_workload_arm' || echo 'django_workload_default'); \
-    ./benchpress_cli.py run $BENCH_JOB -r server -i '{\"db_addr\": \"'${DB_ADDR}'\"}'"]
+    ./benchpress_cli.py run --print-realtime $BENCH_JOB -r server -i '{\"db_addr\": \"'${DB_ADDR}'\"}'"]
 
 
 
@@ -107,13 +107,13 @@ ENV ARCH=${ARCH}
 # Use benchpress_cli.py as documented in README
 CMD ["sh", "-c", "BENCH_JOB=$([ \"${ARCH}\" = \"arm64\" ] || [ \"${ARCH}\" = \"aarch64\" ] && echo 'django_workload_arm' || echo 'django_workload_default'); \
     if [ -n \"${REPS}\" ] && [ -n \"${ITERATIONS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\", \"reps\": '${REPS}', \"iterations\": '${ITERATIONS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\", \"reps\": '${REPS}', \"iterations\": '${ITERATIONS}'}'; \
     elif [ -n \"${REPS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\", \"reps\": '${REPS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\", \"reps\": '${REPS}'}'; \
     elif [ -n \"${ITERATIONS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\", \"iterations\": '${ITERATIONS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\", \"iterations\": '${ITERATIONS}'}'; \
     else \
-        ./benchpress_cli.py run $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\"}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r client -i '{\"server_addr\": \"'${SERVER_ADDR}'\"}'; \
     fi"]
 
 
@@ -142,13 +142,13 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=60s --retries=5 \
 # Use benchpress_cli.py as documented in README
 CMD ["sh", "-c", "BENCH_JOB=$([ \"${ARCH}\" = \"arm64\" ] || [ \"${ARCH}\" = \"aarch64\" ] && echo 'django_workload_arm' || echo 'django_workload_default'); \
     if [ -n \"${REPS}\" ] && [ -n \"${ITERATIONS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\", \"reps\": '${REPS}', \"iterations\": '${ITERATIONS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\", \"reps\": '${REPS}', \"iterations\": '${ITERATIONS}'}'; \
     elif [ -n \"${REPS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\", \"reps\": '${REPS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\", \"reps\": '${REPS}'}'; \
     elif [ -n \"${ITERATIONS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\", \"iterations\": '${ITERATIONS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\", \"iterations\": '${ITERATIONS}'}'; \
     else \
-        ./benchpress_cli.py run $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\"}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r clientserver -i '{\"db_addr\": \"'${DB_ADDR}'\"}'; \
     fi"]
 
 
@@ -176,11 +176,11 @@ HEALTHCHECK --interval=30s --timeout=10s --start-period=120s --retries=5 \
 # Use benchpress_cli.py as documented in README
 CMD ["sh", "-c", "BENCH_JOB=$([ \"${ARCH}\" = \"arm64\" ] || [ \"${ARCH}\" = \"aarch64\" ] && echo 'django_workload_arm' || echo 'django_workload_default'); \
     if [ -n \"${REPS}\" ] && [ -n \"${ITERATIONS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r standalone -i '{\"reps\": '${REPS}', \"iterations\": '${ITERATIONS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r standalone -i '{\"reps\": '${REPS}', \"iterations\": '${ITERATIONS}'}'; \
     elif [ -n \"${REPS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r standalone -i '{\"reps\": '${REPS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r standalone -i '{\"reps\": '${REPS}'}'; \
     elif [ -n \"${ITERATIONS}\" ]; then \
-        ./benchpress_cli.py run $BENCH_JOB -r standalone -i '{\"iterations\": '${ITERATIONS}'}'; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r standalone -i '{\"iterations\": '${ITERATIONS}'}'; \
     else \
-        ./benchpress_cli.py run $BENCH_JOB -r standalone; \
+        ./benchpress_cli.py run --print-realtime $BENCH_JOB -r standalone; \
     fi"]

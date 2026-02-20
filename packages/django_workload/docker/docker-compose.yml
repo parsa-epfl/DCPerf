@@ -60,6 +60,9 @@ services:
     environment:
       # Required: Cassandra database address (hostname or IP)
       DB_ADDR: "cassandra-db"
+      
+      # Optional: Number of Django server worker threads. If not set, defaults to number of CPU cores.
+      NUM_DJANGO_THREADS: "${NUM_DJANGO_THREADS:-}"
     ports:
       - "8000:8000"  # Django/uWSGI
     volumes:
@@ -104,11 +107,14 @@ services:
       SERVER_ADDR: "django-server"
       
       # Optional: Number of benchmark iterations (default: 7)
-      ITERATIONS: ""
+      ITERATIONS: "${ITERATIONS:-}"
       
       # Optional: Fixed number of requests per iteration
       # Leave empty to use default time-based benchmarking
-      REPS: ""
+      REPS: "${REPS:-}"
+      
+      # Optional: Number of Siege client worker threads
+      NUM_CLIENT_THREADS: "${NUM_CLIENT_THREADS:-}"
     volumes:
       # Mount directory for results
       - ./results:/DCPerf/benchmarks/django_workload/results

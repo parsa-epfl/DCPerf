@@ -44,15 +44,15 @@ show_help() {
 cat <<EOF
 Usage: ${0##*/} [-h] [-r role] [-w number of workers] [-i number of iterations] [-d duration of workload] [-p number of repetitions] [-l siege logfile path] [-s urls path] [-c cassandra host ip]
 Proxy shell script to executes django-workload benchmark
-    -r          role (clientserver, client, server or db, default is clientserver)
+    -r          role (db, server, client, clientserver, or standalone)
     -h          display this help and exit
 For role "server", "clientserver":
-    -w          number of server workers (default NPROC)
+    -w          number of server workers (default NPROC, or NUM_DJANGO_THREADS env var)
     -c          ip address of the cassandra server (required)
     -m          minimum icachebuster calling rounds (default 100000)
     -M          maximum icachebuster calling rounds (default 200000)
 For role "client", "clientserver":
-    -x          number of client workers (default 1.2*NPROC)
+    -x          number of client workers (default 1.2*NPROC, or NUM_CLIENT_THREADS env var)
     -i          number of iterations (default 7)
     -p          run each iteration of benchmark for fixed repetitions rather
                 than certain amount of time. If this is set to a positive
@@ -65,6 +65,10 @@ For role "client":
 For role "db":
     -y          number of cassandra concurrent writes (default 128)
     -b          ip address that cassandra will bind to (default to the first IP from "hostname -i": `hostname -i`)
+
+Environment Variables:
+    NUM_DJANGO_THREADS   Number of Django server workers (used if -w not provided)
+    NUM_CLIENT_THREADS   Number of Siege client workers (used if -x not provided)
 
 EOF
 }
@@ -223,10 +227,10 @@ start_clientserver() {
 
 main() {
   local num_server_workers
-  num_server_workers="$(nproc)"
+  num_server_workers="${NUM_DJANGO_THREADS:-$(nproc)}"
 
   local num_client_workers
-  num_client_workers="0"
+  num_client_workers="${NUM_CLIENT_THREADS:-0}"
 
   local num_cassandra_writes
   num_cassandra_writes="128"
@@ -267,7 +271,6 @@ main() {
   while getopts 'w:x:y:i:p:d:l:s:r:c:z:b:m:M:' OPTION "${@}"; do
     case "$OPTION" in
       w)
-        # Use readlink to get absolute path if relative is given
         num_server_workers="${OPTARG}"
         ;;
       x)
@@ -358,7 +361,7 @@ main() {
     pgrep -f cassandra | xargs kill
 
   else
-    echo "Role $role is invalid, it can only be 'db' or 'clientserver' or 'standalone'";
+    echo "Role $role is invalid, it can only be 'db', 'server', 'client', 'clientserver', or 'standalone'";
     exit 1
   fi
   exit 0

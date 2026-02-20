@@ -302,9 +302,9 @@ docker-compose down -v
 make clean-all
 
 # Or manually (replace x86_64 with arm64 if on ARM)
-docker rmi akrishnaams/dcperf-djangobench-cassandra-x86_64:latest \
-        akrishnaams/dcperf-djangobench-server-x86_64:latest \
-        akrishnaams/dcperf-djangobench-client-x86_64:latest
+docker rmi docker.io/akrishnaams/dcperf-djangobench-cassandra-x86_64:latest \
+        docker.io/akrishnaams/dcperf-djangobench-server-x86_64:latest \
+        docker.io/akrishnaams/dcperf-djangobench-client-x86_64:latest
 
 # Full cleanup including build cache
 docker system prune -a

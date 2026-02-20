@@ -5,7 +5,11 @@
 .DEFAULT_GOAL := help
 
 # Variables
-COMPOSE := docker-compose
+# Support both docker-compose (V1) and docker compose (V2)
+COMPOSE := $(shell command -v docker-compose 2>/dev/null)
+ifndef COMPOSE
+	COMPOSE := docker compose
+endif
 DOCKER := docker
 
 # Auto-detect architecture if not set
@@ -86,9 +90,9 @@ clean: ## Stop containers and remove volumes
 	$(COMPOSE) down -v
 
 clean-all: clean ## Stop containers, remove volumes and images
-	$(DOCKER) rmi akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest \
-	            akrishnaams/dcperf-djangobench-server-$(ARCH):latest \
-	            akrishnaams/dcperf-djangobench-client-$(ARCH):latest || true
+	$(DOCKER) rmi docker.io/akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest \
+	            docker.io/akrishnaams/dcperf-djangobench-server-$(ARCH):latest \
+	            docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest || true
 
 setup: ## Create required directories
 	mkdir -p results logs/cassandra logs/django
@@ -104,7 +108,7 @@ prune: ## Remove all stopped containers, networks, and build cache
 
 arch: ## Show detected architecture
 	@echo "Detected architecture: $(ARCH)"
-	@echo "Will use images: akrishnaams/dcperf-djangobench-*-$(ARCH):latest"
+	@echo "Will use images: docker.io/akrishnaams/dcperf-djangobench-*-$(ARCH):latest"
 	@echo "Will use benchpress job: $$([ "$(ARCH)" = "arm64" ] && echo 'django_workload_arm' || echo 'django_workload_default')"
 
 inspect-db: ## Inspect Cassandra database container

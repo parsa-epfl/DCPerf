@@ -2,8 +2,8 @@
 # Architecture-aware build - automatically detects x86_64 or arm64
 # Build examples:
 #   docker-compose build  (auto-detects architecture)
-#   docker build --target db --build-arg ARCH=x86_64 -t akrishnaams/dcperf-djangobench-cassandra-x86_64:latest .
-#   docker build --target db --build-arg ARCH=arm64 -t akrishnaams/dcperf-djangobench-cassandra-arm64:latest .
+#   docker build --target db --build-arg ARCH=x86_64 -t docker.io/akrishnaams/dcperf-djangobench-cassandra-x86_64:latest .
+#   docker build --target db --build-arg ARCH=arm64 -t docker.io/akrishnaams/dcperf-djangobench-cassandra-arm64:latest .
 # Use with docker-compose for multi-container setup
 
 # Detect architecture
@@ -11,7 +11,7 @@ ARG TARGETARCH
 ARG ARCH=${TARGETARCH}
 
 # Select base image based on architecture
-FROM akrishnaams/dcperf-base-${ARCH}:latest AS base
+FROM docker.io/akrishnaams/dcperf-base-${ARCH}:latest AS base
 
 WORKDIR /DCPerf
 
@@ -21,6 +21,7 @@ RUN echo "Building for architecture: ${ARCH}"
 
 # Install appropriate django workload
 RUN apt-get update -qq && \
+    apt-get install -y --no-install-recommends python3-pip curl lsof && \
     if [ "${ARCH}" = "arm64" ] || [ "${ARCH}" = "aarch64" ]; then \
         ./benchpress_cli.py install django_workload_arm >/dev/null 2>&1; \
     else \

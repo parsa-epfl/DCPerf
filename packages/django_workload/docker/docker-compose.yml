@@ -1,4 +1,3 @@
-version: '3.8'
 
 services:
   # Cassandra Database Server - Running on Core 0
@@ -9,7 +8,7 @@ services:
       target: db
       args:
         ARCH: ${ARCH:-x86_64}
-    image: akrishnaams/dcperf-djangobench-cassandra-${ARCH:-x86_64}:latest
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-x86_64}:latest
     container_name: django-cassandra-db
     hostname: cassandra-db
     networks:
@@ -50,7 +49,7 @@ services:
       target: server
       args:
         ARCH: ${ARCH:-x86_64}
-    image: akrishnaams/dcperf-djangobench-server-${ARCH:-x86_64}:latest
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-x86_64}:latest
     container_name: django-server
     hostname: django-server
     networks:
@@ -92,7 +91,7 @@ services:
       target: client
       args:
         ARCH: ${ARCH:-x86_64}
-    image: akrishnaams/dcperf-djangobench-client-${ARCH:-x86_64}:latest
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-x86_64}:latest
     container_name: django-siege-client
     hostname: siege-client
     networks:

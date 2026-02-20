@@ -15,6 +15,8 @@ FROM docker.io/akrishnaams/dcperf-base-${ARCH}:latest AS base
 
 WORKDIR /DCPerf
 
+RUN git checkout ayan-expt
+
 # Set benchpress job name based on architecture
 ARG ARCH
 RUN echo "Building for architecture: ${ARCH}"

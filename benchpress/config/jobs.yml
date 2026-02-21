@@ -219,12 +219,11 @@
       args:
         - '-r server'
         - '-c {db_addr}'
-        - '-w {num_workers}'
+        # - '-w {num_workers}'
         - '-m 50000'
         - '-M 100000'
       vars:
         - 'db_addr'
-        - 'num_workers=0'
     client:
       args:
         - '-r client'
@@ -234,13 +233,12 @@
         - '-p {reps}'
         - '-l ./siege.log'
         - '-s urls.txt'
-        - '-x {num_workers}'
+        # - '-x {num_workers}'
       vars:
         - 'server_addr'
         - 'duration=5M'
         - 'iterations=7'
         - 'reps=0'
-        - 'num_workers=0'
     db:
       args:
         - '-r db'

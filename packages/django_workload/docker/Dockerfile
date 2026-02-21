@@ -23,7 +23,7 @@ RUN echo "Building for architecture: ${ARCH}"
 
 # Install appropriate django workload
 RUN apt-get update -qq && \
-    apt-get install -y --no-install-recommends python3-pip curl lsof && \
+    apt-get install -y --no-install-recommends python3-pip curl lsof netcat-openbsd && \
     if [ "${ARCH}" = "arm64" ] || [ "${ARCH}" = "aarch64" ]; then \
         ./benchpress_cli.py install django_workload_arm >/dev/null 2>&1; \
     else \

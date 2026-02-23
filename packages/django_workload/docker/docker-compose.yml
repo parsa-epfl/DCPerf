@@ -9,6 +9,7 @@ services:
       args:
         ARCH: ${ARCH:-x86_64}
     image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-x86_64}:latest
+    pid: "host"
     container_name: django-cassandra-db
     hostname: cassandra-db
     networks:
@@ -30,6 +31,7 @@ services:
       retries: 10
       start_period: 120s
     # CPU Affinity: Pin to Core 0
+    # cpuset: "0-35"
     cpuset: "0"
     privileged: true
     # Resource limits (adjust based on your system)
@@ -51,6 +53,7 @@ services:
       args:
         ARCH: ${ARCH:-x86_64}
     image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-x86_64}:latest
+    pid: "host"
     container_name: django-server
     hostname: django-server
     networks:
@@ -76,6 +79,7 @@ services:
       retries: 5
       start_period: 60s
     # CPU Affinity: Pin to Core 0
+    # cpuset: "0-35"
     cpuset: "0"
     privileged: true
     # Resource limits (adjust based on your system)
@@ -97,6 +101,7 @@ services:
       args:
         ARCH: ${ARCH:-x86_64}
     image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-x86_64}:latest
+    pid: "host"
     container_name: django-siege-client
     hostname: siege-client
     networks:
@@ -117,10 +122,12 @@ services:
       
       # Optional: Number of Siege client worker threads
       NUM_CLIENT_THREADS: "${NUM_CLIENT_THREADS:-}"
+      # NUM_CLIENT_THREADS: "44"
     volumes:
       # Mount directory for results
       - ./results:/DCPerf/benchmarks/django_workload/results
     # CPU Affinity: Pin to Core 1
+    # cpuset: "36-47"
     cpuset: "1"
     privileged: true
     # Resource limits (adjust based on your system)

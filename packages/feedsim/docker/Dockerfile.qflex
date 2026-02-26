@@ -7,8 +7,8 @@
 # ==========================================
 # Standard - Full-featured image with dcperf-base
 # ==========================================
-FROM akrishnaams/dcperf-base-x86_64:latest AS standard
-# FROM akrishnaams/dcperf-base-arm64:latest AS standard
+# FROM akrishnaams/dcperf-base-x86_64:latest AS standard
+FROM akrishnaams/dcperf-base-arm64:latest AS standard
 
 WORKDIR /DCPerf
 RUN git checkout feedsim
@@ -27,8 +27,8 @@ CMD ["./health_check.sh"]
 # ==========================================
 # Lean - Minimal runtime image
 # ==========================================
-FROM akrishnaams/dcperf-base-x86_64:latest AS lean
-# FROM akrishnaams/dcperf-base-arm64:latest AS lean
+# FROM akrishnaams/dcperf-base-x86_64:latest AS lean
+FROM akrishnaams/dcperf-base-arm64:latest AS lean
 
 WORKDIR /DCPerf
 RUN git checkout ayan-expt

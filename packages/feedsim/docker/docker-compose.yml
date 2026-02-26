@@ -1,0 +1,25 @@
+services:
+  feedsim:
+    build:
+      context: ../../..
+      dockerfile: packages/feedsim/docker/Dockerfile.qflex
+      target: lean
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-feedsim-${ARCH:-arm64}:latest
+    container_name: feedsim
+    privileged: true
+    network_mode: host
+    cpuset: "${SERVER_NODE_CPUS},${CLIENT_NODE_CPUS}"
+    environment:
+      - THRIFT_THREADS=${THRIFT_THREADS}
+      - RANKING_THREADS=${RANKING_THREADS}
+      - SRV_IO_THREADS=${SRV_IO_THREADS}
+      - EVENTBASE_THREADS=${EVENTBASE_THREADS}
+      - SRV_THREADS=${SRV_THREADS}
+      - DRIVER_THREADS=${DRIVER_THREADS}
+      - WARMUP_DURATION=${WARMUP_DURATION}
+      - FIXED_QPS_DURATION=${FIXED_QPS_DURATION}
+      - FIXED_QPS=${FIXED_QPS}
+      - SERVER_NODE_CPUS=${SERVER_NODE_CPUS}
+      - CLIENT_NODE_CPUS=${CLIENT_NODE_CPUS}

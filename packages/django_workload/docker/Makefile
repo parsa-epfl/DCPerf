@@ -1,5 +1,8 @@
 # Makefile for Django Workload Docker Setup (3-Container Architecture)
-.PHONY: help build up down logs clean start stop restart shell-db shell-server shell-client status
+.PHONY: help config build clean-build pull up down logs clean start stop restart status ps \
+        setup init prune stats reset run run-detached clean-all \
+        build-db build-server build-client clean-build-db clean-build-server clean-build-client \
+        push push-db push-server push-client pull-db pull-server pull-client
 
 # Default target
 .DEFAULT_GOAL := help
@@ -16,33 +19,129 @@ DOCKER := docker
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/;s/arm64/arm64/')
 export ARCH
 
+# Configuration selection
+CORES ?= single-core
+INSTANCES ?= 1
+
+# Determine which docker-compose file to use
+ifeq ($(INSTANCES),3)
+	COMPOSE_FILE := docker-compose-3-inst.yml
+	CONFIG := $(CORES)-3-inst
+else
+	COMPOSE_FILE := docker-compose.yml
+	CONFIG := $(CORES)
+endif
+
+# Determine which .env file to use
+ENV_FILE := .env.$(CONFIG)
+
+# Compose command with config files
+COMPOSE_CMD := $(COMPOSE) -f $(COMPOSE_FILE) --env-file $(ENV_FILE)
+
+# Service mappings
+SERVICES := db server client
+CONTAINER_db := cassandra-db
+CONTAINER_server := django-server
+CONTAINER_client := siege-client
+
+# Template to generate service-specific rules for single instance
+define make-service-rules
+logs-$(1): ## Show logs from $(1)
+	$(COMPOSE_CMD) logs -f $(CONTAINER_$(1))
+
+shell-$(1): ## Open shell in $(1)
+	$(COMPOSE_CMD) exec $(CONTAINER_$(1)) /bin/bash
+
+start-$(1): ## Start only $(1)
+	$(COMPOSE_CMD) up -d $(CONTAINER_$(1))
+
+stop-$(1): ## Stop $(1)
+	$(COMPOSE_CMD) stop $(CONTAINER_$(1))
+endef
+
+# Template to generate 3-instance rules
+define make-instance-rules
+logs-$(1)-inst$(2): ## Show logs from $(1) instance $(2)
+	$(COMPOSE_CMD) logs -f $(CONTAINER_$(1))-inst$(2)
+
+shell-$(1)-inst$(2): ## Open shell in $(1) instance $(2)
+	$(COMPOSE_CMD) exec $(CONTAINER_$(1))-inst$(2) /bin/bash
+
+start-$(1)-inst$(2): ## Start only $(1) instance $(2)
+	$(COMPOSE_CMD) up -d $(CONTAINER_$(1))-inst$(2)
+
+stop-$(1)-inst$(2): ## Stop $(1) instance $(2)
+	$(COMPOSE_CMD) stop $(CONTAINER_$(1))-inst$(2)
+endef
+
+# Generate rules for single-instance mode
+$(foreach service,$(SERVICES),$(eval $(call make-service-rules,$(service))))
+
+# Generate rules for 3-instance mode
+$(foreach service,$(SERVICES),$(foreach inst,1 2 3,$(eval $(call make-instance-rules,$(service),$(inst)))))
+
 help: ## Show this help message
 	@echo "Django Workload Docker Commands (3-Container Setup)"
 	@echo "Architecture: $(ARCH)"
 	@echo ""
+	@echo "Configuration Variables:"
+	@echo "  CORES=$(CORES) (options: single-core, 16-core)"
+	@echo "  INSTANCES=$(INSTANCES) (options: 1, 3)"
+	@echo "  Using: $(COMPOSE_FILE) with $(ENV_FILE)"
+	@echo ""
+	@echo "Usage examples:"
+	@echo "  make up                                              # Use defaults (single-core, 1 instance)"
+	@echo "  make CORES=16-core up               # 16-core, single instance"
+	@echo "  make CORES=16-core INSTANCES=3 up      # 16-core, 3 instances"
+	@echo "  make CORES=single-core INSTANCES=1 up  # Single-core, 1 instance"
+	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
-clean-build-db:
-	$(COMPOSE) build --no-cache cassandra-db
+config: ## Show current configuration
+	@echo "Current Configuration:"
+	@echo "  CORES       = $(CORES)"
+	@echo "  INSTANCES   = $(INSTANCES)"
+	@echo "  CONFIG      = $(CONFIG)"
+	@echo "  COMPOSE_FILE = $(COMPOSE_FILE)"
+	@echo "  ENV_FILE    = $(ENV_FILE)"
+	@echo "  ARCH        = $(ARCH)"
+	@echo ""
+	@if [ -f "$(COMPOSE_FILE)" ]; then \
+		echo "✓ Docker Compose file exists: $(COMPOSE_FILE)"; \
+	else \
+		echo "✗ Docker Compose file NOT found: $(COMPOSE_FILE)"; \
+	fi
+	@if [ -f "$(ENV_FILE)" ]; then \
+		echo "✓ Environment file exists: $(ENV_FILE)"; \
+	else \
+		echo "✗ Environment file NOT found: $(ENV_FILE)"; \
+	fi
 
-clean-build-server:
-	$(COMPOSE) build --no-cache django-server
-
-clean-build-client:
-	$(COMPOSE) build --no-cache siege-client
 
 build: ## Build all Docker images (db, server, client)
-	$(COMPOSE) build
+	$(COMPOSE_CMD) build
 
-build-db: ## Build only the Cassandra database image
-	$(COMPOSE) build cassandra-db
+build-db: ## Build only the Cassandra database image (single-instance only)
+	$(COMPOSE_CMD) build cassandra-db
 
-build-server: ## Build only the Django server image
-	$(COMPOSE) build django-server
+build-server: ## Build only the Django server image (single-instance only)
+	$(COMPOSE_CMD) build django-server
 
-build-client: ## Build only the Siege client image
-	$(COMPOSE) build siege-client
+build-client: ## Build only the Siege client image (single-instance only)
+	$(COMPOSE_CMD) build siege-client
+
+clean-build-db:
+	$(COMPOSE_CMD) build --no-cache cassandra-db
+
+clean-build-server:
+	$(COMPOSE_CMD) build --no-cache django-server
+
+clean-build-client:
+	$(COMPOSE_CMD) build --no-cache siege-client
+
+clean-build: ## Build all Docker images with no cache
+	$(COMPOSE_CMD) build --no-cache
 
 push: ## Push all Docker images to registry
 	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest
@@ -58,59 +157,48 @@ push-server: ## Push only the Django server image
 push-client: ## Push only the Siege client image
 	$(DOCKER) push docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest
 
+pull: ## Pull all Docker images from registry
+	$(DOCKER) pull docker.io/akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest
+	$(DOCKER) pull docker.io/akrishnaams/dcperf-djangobench-server-$(ARCH):latest
+	$(DOCKER) pull docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest
+
+pull-db: ## Pull only the Cassandra database image
+	$(DOCKER) pull docker.io/akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest
+
+pull-server: ## Pull only the Django server image
+	$(DOCKER) pull docker.io/akrishnaams/dcperf-djangobench-server-$(ARCH):latest
+
+pull-client: ## Pull only the Siege client image
+	$(DOCKER) pull docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest
+
 up: ## Start all containers in detached mode
-	$(COMPOSE) up -d
+	$(COMPOSE_CMD) up -d
 
 start: up ## Alias for 'up'
 
 down: ## Stop and remove all containers
-	$(COMPOSE) down
+	$(COMPOSE_CMD) down
 
 stop: down ## Alias for 'down'
 
 restart: ## Restart all containers
-	$(COMPOSE) restart
+	$(COMPOSE_CMD) restart
 
 logs: ## Show logs from all containers (follow mode)
-	$(COMPOSE) logs -f
-
-logs-db: ## Show logs from Cassandra database container
-	$(COMPOSE) logs -f cassandra-db
-
-logs-server: ## Show logs from Django server container
-	$(COMPOSE) logs -f django-server
-
-logs-client: ## Show logs from Siege client container
-	$(COMPOSE) logs -f siege-client
+	$(COMPOSE_CMD) logs -f
 
 status: ## Show status of all containers
-	$(COMPOSE) ps
+	$(COMPOSE_CMD) ps
 
 ps: status ## Alias for 'status'
 
-shell-db: ## Open shell in Cassandra database container
-	$(COMPOSE) exec cassandra-db /bin/bash
-
-shell-server: ## Open shell in Django server container
-	$(COMPOSE) exec django-server /bin/bash
-
-shell-client: ## Open shell in Siege client container
-	$(COMPOSE) exec siege-client /bin/bash
-
-health: ## Check health status of all services
-	@echo "=== Container Status ==="
-	@$(COMPOSE) ps
-	@echo ""
-	@echo "=== Health Checks ==="
-	@$(DOCKER) inspect --format='{{.Name}}: {{.State.Health.Status}}' $$($(COMPOSE) ps -q) 2>/dev/null || echo "No health checks configured"
-
 run: ## Run benchmark (start containers and show logs)
-	$(COMPOSE) up
+	$(COMPOSE_CMD) up
 
 run-detached: up logs ## Start containers in background and show logs
 
 clean: ## Stop containers and remove volumes
-	$(COMPOSE) down -v
+	$(COMPOSE_CMD) down -v
 
 clean-all: clean ## Stop containers, remove volumes and images
 	$(DOCKER) rmi docker.io/akrishnaams/dcperf-djangobench-cassandra-$(ARCH):latest \
@@ -118,93 +206,24 @@ clean-all: clean ## Stop containers, remove volumes and images
 	            docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest || true
 
 setup: ## Create required directories
+ifeq ($(INSTANCES),3)
+	mkdir -p results/inst1 results/inst2 results/inst3 logs/cassandra-inst1 logs/cassandra-inst2 logs/cassandra-inst3 logs/django-inst1 logs/django-inst2 logs/django-inst3
+else
 	mkdir -p results logs/cassandra logs/django
+endif
 
-setup-env: ## Copy .env.example to .env
-	cp .env.example .env
-	@echo "Created .env file. Please edit it to customize configuration."
-
-init: setup setup-env ## Initialize environment (create directories and .env)
+init: setup ## Initialize environment (create directories)
 
 prune: ## Remove all stopped containers, networks, and build cache
 	$(DOCKER) system prune -f
 
-arch: ## Show detected architecture
-	@echo "Detected architecture: $(ARCH)"
-	@echo "Will use images: docker.io/akrishnaams/dcperf-djangobench-*-$(ARCH):latest"
-	@echo "Will use benchpress job: $$([ "$(ARCH)" = "arm64" ] && echo 'django_workload_arm' || echo 'django_workload_default')"
-
-inspect-db: ## Inspect Cassandra database container
-	$(COMPOSE) exec cassandra-db nodetool status || echo "Cassandra not ready"
-
-inspect-server: ## Inspect Django server container
-	$(COMPOSE) exec django-server ps aux
-
-inspect-client: ## Inspect Siege client container
-	$(COMPOSE) exec siege-client ps aux
-
 stats: ## Show resource usage statistics
 	$(DOCKER) stats --no-stream
 
-# Quick benchmark runs
-quick: ## Quick benchmark run (3 iterations, fixed reps)
-	ITERATIONS=3 REPS=10000 $(COMPOSE) up
-
-dev: ## Development run (1 iteration, 5000 reps for quick testing)
-	ITERATIONS=1 REPS=5000 $(COMPOSE) up
-
-# Troubleshooting
-check-network: ## Check network connectivity between containers
-	@echo "Testing connectivity..."
-	@echo "Django Server → Cassandra:"
-	@$(COMPOSE) exec django-server nc -zv cassandra-db 9042 && echo "✓ Connection successful" || echo "✗ Connection failed"
-	@echo "Siege Client → Django Server:"
-	@$(COMPOSE) exec siege-client nc -zv django-server 8000 && echo "✓ Connection successful" || echo "✗ Connection failed"
-
-check-ports: ## Check if required ports are available
-	@echo "Checking ports..."
-	@! lsof -i :9042 > /dev/null && echo "✓ Port 9042 available" || echo "✗ Port 9042 in use"
-	@! lsof -i :8000 > /dev/null && echo "✓ Port 8000 available" || echo "✗ Port 8000 in use"
-
-check-cpus: ## Check CPU affinity for all containers
-	@echo "=== CPU Affinity Configuration ==="
-	@echo "Cassandra DB (should be on Core 0):"
-	@$(DOCKER) inspect django-cassandra-db --format='{{.HostConfig.CpusetCpus}}' || echo "Not running"
-	@echo "Django Server (should be on Core 0):"
-	@$(DOCKER) inspect django-server --format='{{.HostConfig.CpusetCpus}}' || echo "Not running"
-	@echo "Siege Client (should be on Core 1):"
-	@$(DOCKER) inspect django-siege-client --format='{{.HostConfig.CpusetCpus}}' || echo "Not running"
-
-# Service-specific commands
-start-db: ## Start only Cassandra database
-	$(COMPOSE) up -d cassandra-db
-
-start-server: ## Start only Django server (requires db)
-	$(COMPOSE) up -d django-server
-
-start-client: ## Start only Siege client (requires server)
-	$(COMPOSE) up -d siege-client
-
-stop-db: ## Stop Cassandra database
-	$(COMPOSE) stop cassandra-db
-
-stop-server: ## Stop Django server
-	$(COMPOSE) stop django-server
-
-stop-client: ## Stop Siege client
-	$(COMPOSE) stop siege-client
-
-# Results and logs management
-results: ## Show benchmark results
-	@ls -lh results/ 2>/dev/null || echo "No results yet. Run a benchmark first."
-
-tail-siege: ## Tail Siege benchmark output in real-time
-	@tail -f results/siege.log 2>/dev/null || echo "No siege.log found"
-
-clean-logs: ## Remove all log files
-	rm -rf logs/*
-
-clean-results: ## Remove all result files
-	rm -rf results/*
+# Service-specific rules (auto-generated from templates above)
+# Available commands: logs-{service}, shell-{service}, start-{service}, stop-{service}
+# Where {service} = db, server, client
+# For 3-instance mode: add -inst1, -inst2, or -inst3 suffix
+# Examples: logs-db, shell-server-inst2, start-client, stop-db-inst1
 
 reset: clean build up ## Complete reset: clean, rebuild, and start

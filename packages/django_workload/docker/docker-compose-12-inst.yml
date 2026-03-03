@@ -1,0 +1,1131 @@
+services:
+
+  cassandra-db-inst1:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst1
+    hostname: cassandra-db-inst1
+    networks:
+      - django-network-inst1
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9042:9042"
+      - "7000:7000"
+      - "7199:7199"
+    volumes:
+      - ./logs/cassandra-inst1:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST1}
+    privileged: true
+
+  django-server-inst1:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst1
+    hostname: django-server-inst1
+    networks:
+      - django-network-inst1
+    depends_on:
+      cassandra-db-inst1:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst1"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8001:8000"
+    volumes:
+      - ./logs/django-inst1:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST1}
+    privileged: true
+
+  siege-client-inst1:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst1
+    hostname: siege-client-inst1
+    networks:
+      - django-network-inst1
+    depends_on:
+      django-server-inst1:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst1"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst1:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST1}
+    privileged: true
+
+  cassandra-db-inst2:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst2
+    hostname: cassandra-db-inst2
+    networks:
+      - django-network-inst2
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9043:9042"
+      - "7001:7000"
+      - "7200:7199"
+    volumes:
+      - ./logs/cassandra-inst2:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST2}
+    privileged: true
+
+  django-server-inst2:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst2
+    hostname: django-server-inst2
+    networks:
+      - django-network-inst2
+    depends_on:
+      cassandra-db-inst2:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst2"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8002:8000"
+    volumes:
+      - ./logs/django-inst2:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST2}
+    privileged: true
+
+  siege-client-inst2:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst2
+    hostname: siege-client-inst2
+    networks:
+      - django-network-inst2
+    depends_on:
+      django-server-inst2:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst2"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst2:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST2}
+    privileged: true
+
+  cassandra-db-inst3:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst3
+    hostname: cassandra-db-inst3
+    networks:
+      - django-network-inst3
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9044:9042"
+      - "7002:7000"
+      - "7201:7199"
+    volumes:
+      - ./logs/cassandra-inst3:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST3}
+    privileged: true
+
+  django-server-inst3:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst3
+    hostname: django-server-inst3
+    networks:
+      - django-network-inst3
+    depends_on:
+      cassandra-db-inst3:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst3"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8003:8000"
+    volumes:
+      - ./logs/django-inst3:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST3}
+    privileged: true
+
+  siege-client-inst3:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst3
+    hostname: siege-client-inst3
+    networks:
+      - django-network-inst3
+    depends_on:
+      django-server-inst3:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst3"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst3:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST3}
+    privileged: true
+
+  cassandra-db-inst4:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst4
+    hostname: cassandra-db-inst4
+    networks:
+      - django-network-inst4
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9045:9042"
+      - "7003:7000"
+      - "7202:7199"
+    volumes:
+      - ./logs/cassandra-inst4:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST4}
+    privileged: true
+
+  django-server-inst4:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst4
+    hostname: django-server-inst4
+    networks:
+      - django-network-inst4
+    depends_on:
+      cassandra-db-inst4:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst4"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8004:8000"
+    volumes:
+      - ./logs/django-inst4:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST4}
+    privileged: true
+
+  siege-client-inst4:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst4
+    hostname: siege-client-inst4
+    networks:
+      - django-network-inst4
+    depends_on:
+      django-server-inst4:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst4"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst4:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST4}
+    privileged: true
+
+  cassandra-db-inst5:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst5
+    hostname: cassandra-db-inst5
+    networks:
+      - django-network-inst5
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9046:9042"
+      - "7004:7000"
+      - "7203:7199"
+    volumes:
+      - ./logs/cassandra-inst5:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST5}
+    privileged: true
+
+  django-server-inst5:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst5
+    hostname: django-server-inst5
+    networks:
+      - django-network-inst5
+    depends_on:
+      cassandra-db-inst5:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst5"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8005:8000"
+    volumes:
+      - ./logs/django-inst5:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST5}
+    privileged: true
+
+  siege-client-inst5:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst5
+    hostname: siege-client-inst5
+    networks:
+      - django-network-inst5
+    depends_on:
+      django-server-inst5:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst5"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst5:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST5}
+    privileged: true
+
+  cassandra-db-inst6:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst6
+    hostname: cassandra-db-inst6
+    networks:
+      - django-network-inst6
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9047:9042"
+      - "7005:7000"
+      - "7204:7199"
+    volumes:
+      - ./logs/cassandra-inst6:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST6}
+    privileged: true
+
+  django-server-inst6:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst6
+    hostname: django-server-inst6
+    networks:
+      - django-network-inst6
+    depends_on:
+      cassandra-db-inst6:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst6"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8006:8000"
+    volumes:
+      - ./logs/django-inst6:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST6}
+    privileged: true
+
+  siege-client-inst6:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst6
+    hostname: siege-client-inst6
+    networks:
+      - django-network-inst6
+    depends_on:
+      django-server-inst6:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst6"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst6:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST6}
+    privileged: true
+
+  cassandra-db-inst7:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst7
+    hostname: cassandra-db-inst7
+    networks:
+      - django-network-inst7
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9048:9042"
+      - "7006:7000"
+      - "7205:7199"
+    volumes:
+      - ./logs/cassandra-inst7:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST7}
+    privileged: true
+
+  django-server-inst7:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst7
+    hostname: django-server-inst7
+    networks:
+      - django-network-inst7
+    depends_on:
+      cassandra-db-inst7:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst7"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8007:8000"
+    volumes:
+      - ./logs/django-inst7:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST7}
+    privileged: true
+
+  siege-client-inst7:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst7
+    hostname: siege-client-inst7
+    networks:
+      - django-network-inst7
+    depends_on:
+      django-server-inst7:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst7"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst7:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST7}
+    privileged: true
+
+  cassandra-db-inst8:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst8
+    hostname: cassandra-db-inst8
+    networks:
+      - django-network-inst8
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9049:9042"
+      - "7007:7000"
+      - "7206:7199"
+    volumes:
+      - ./logs/cassandra-inst8:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST8}
+    privileged: true
+
+  django-server-inst8:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst8
+    hostname: django-server-inst8
+    networks:
+      - django-network-inst8
+    depends_on:
+      cassandra-db-inst8:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst8"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8008:8000"
+    volumes:
+      - ./logs/django-inst8:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST8}
+    privileged: true
+
+  siege-client-inst8:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst8
+    hostname: siege-client-inst8
+    networks:
+      - django-network-inst8
+    depends_on:
+      django-server-inst8:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst8"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst8:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST8}
+    privileged: true
+
+  cassandra-db-inst9:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst9
+    hostname: cassandra-db-inst9
+    networks:
+      - django-network-inst9
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9050:9042"
+      - "7008:7000"
+      - "7207:7199"
+    volumes:
+      - ./logs/cassandra-inst9:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST9}
+    privileged: true
+
+  django-server-inst9:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst9
+    hostname: django-server-inst9
+    networks:
+      - django-network-inst9
+    depends_on:
+      cassandra-db-inst9:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst9"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8009:8000"
+    volumes:
+      - ./logs/django-inst9:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST9}
+    privileged: true
+
+  siege-client-inst9:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst9
+    hostname: siege-client-inst9
+    networks:
+      - django-network-inst9
+    depends_on:
+      django-server-inst9:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst9"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst9:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST9}
+    privileged: true
+
+  cassandra-db-inst10:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst10
+    hostname: cassandra-db-inst10
+    networks:
+      - django-network-inst10
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9051:9042"
+      - "7009:7000"
+      - "7208:7199"
+    volumes:
+      - ./logs/cassandra-inst10:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST10}
+    privileged: true
+
+  django-server-inst10:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst10
+    hostname: django-server-inst10
+    networks:
+      - django-network-inst10
+    depends_on:
+      cassandra-db-inst10:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst10"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8010:8000"
+    volumes:
+      - ./logs/django-inst10:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST10}
+    privileged: true
+
+  siege-client-inst10:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst10
+    hostname: siege-client-inst10
+    networks:
+      - django-network-inst10
+    depends_on:
+      django-server-inst10:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst10"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst10:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST10}
+    privileged: true
+
+  cassandra-db-inst11:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst11
+    hostname: cassandra-db-inst11
+    networks:
+      - django-network-inst11
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9052:9042"
+      - "7010:7000"
+      - "7209:7199"
+    volumes:
+      - ./logs/cassandra-inst11:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST11}
+    privileged: true
+
+  django-server-inst11:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst11
+    hostname: django-server-inst11
+    networks:
+      - django-network-inst11
+    depends_on:
+      cassandra-db-inst11:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst11"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8011:8000"
+    volumes:
+      - ./logs/django-inst11:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST11}
+    privileged: true
+
+  siege-client-inst11:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst11
+    hostname: siege-client-inst11
+    networks:
+      - django-network-inst11
+    depends_on:
+      django-server-inst11:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst11"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst11:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST11}
+    privileged: true
+
+  cassandra-db-inst12:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db-inst12
+    hostname: cassandra-db-inst12
+    networks:
+      - django-network-inst12
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9053:9042"
+      - "7011:7000"
+      - "7210:7199"
+    volumes:
+      - ./logs/cassandra-inst12:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS_INST12}
+    privileged: true
+
+  django-server-inst12:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server-inst12
+    hostname: django-server-inst12
+    networks:
+      - django-network-inst12
+    depends_on:
+      cassandra-db-inst12:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db-inst12"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8012:8000"
+    volumes:
+      - ./logs/django-inst12:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS_INST12}
+    privileged: true
+
+  siege-client-inst12:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client-inst12
+    hostname: siege-client-inst12
+    networks:
+      - django-network-inst12
+    depends_on:
+      django-server-inst12:
+        condition: service_healthy
+    environment:
+      SERVER_ADDR: "django-server-inst12"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results/inst12:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS_INST12}
+    privileged: true
+
+networks:
+
+  django-network-inst1:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.21.0.0/16
+
+  django-network-inst2:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.22.0.0/16
+
+  django-network-inst3:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.23.0.0/16
+
+  django-network-inst4:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.24.0.0/16
+
+  django-network-inst5:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.25.0.0/16
+
+  django-network-inst6:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.26.0.0/16
+
+  django-network-inst7:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.27.0.0/16
+
+  django-network-inst8:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.28.0.0/16
+
+  django-network-inst9:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.29.0.0/16
+
+  django-network-inst10:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.30.0.0/16
+
+  django-network-inst11:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.31.0.0/16
+
+  django-network-inst12:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.32.0.0/16

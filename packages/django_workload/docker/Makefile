@@ -1,4 +1,4 @@
-# Makefile for Django Workload Docker Setup (3-Container Architecture)
+# Makefile for Django Workload Docker Setup
 .PHONY: help config build clean-build pull up down logs clean start stop restart status ps \
         setup init prune stats reset run run-detached clean-all \
         build-db build-server build-client clean-build-db clean-build-server clean-build-client \
@@ -7,7 +7,6 @@
 # Default target
 .DEFAULT_GOAL := help
 
-# Variables
 # Support both docker-compose (V1) and docker compose (V2)
 COMPOSE := $(shell command -v docker-compose 2>/dev/null)
 ifndef COMPOSE
@@ -19,24 +18,49 @@ DOCKER := docker
 ARCH ?= $(shell uname -m | sed 's/x86_64/x86_64/;s/aarch64/arm64/;s/arm64/arm64/')
 export ARCH
 
-# Configuration selection
-CORES ?= single-core
+# Configuration - CORES is a number (1, 16, 32, ...), INSTANCES is a count
+CORES ?= 1
 INSTANCES ?= 1
 
-# Determine which docker-compose file to use
-ifeq ($(INSTANCES),3)
-	COMPOSE_FILE := docker-compose-3-inst.yml
-	CONFIG := $(CORES)-3-inst
+# Derive human-readable cores label: 1 -> single-core, N -> N-core
+ifeq ($(CORES),1)
+	CORES_LABEL := single-core
 else
-	COMPOSE_FILE := docker-compose.yml
-	CONFIG := $(CORES)
+	CORES_LABEL := $(CORES)-core
 endif
 
-# Determine which .env file to use
+# Determine compose file name
+ifeq ($(INSTANCES),1)
+	COMPOSE_FILE := docker-compose.yml
+else
+	COMPOSE_FILE := docker-compose-$(INSTANCES)-inst.yml
+endif
+
+# Determine env file name
+ifeq ($(INSTANCES),1)
+	CONFIG := $(CORES_LABEL)
+else
+	CONFIG := $(CORES_LABEL)-$(INSTANCES)-inst
+endif
 ENV_FILE := .env.$(CONFIG)
+
+# Auto-generate compose file if not present
+ifeq (,$(wildcard $(COMPOSE_FILE)))
+$(info Generating missing $(COMPOSE_FILE) for $(INSTANCES) instance(s), arch=$(ARCH)...)
+$(shell python3 generate_docker_compose.py $(INSTANCES) $(COMPOSE_FILE) --arch $(ARCH))
+endif
+
+# Auto-generate env file if not present
+ifeq (,$(wildcard $(ENV_FILE)))
+$(info Generating missing $(ENV_FILE) for $(CORES) cores, $(INSTANCES) instance(s), arch=$(ARCH)...)
+$(shell python3 generate_env.py $(CORES) $(INSTANCES) $(ENV_FILE) --arch $(ARCH))
+endif
 
 # Compose command with config files
 COMPOSE_CMD := $(COMPOSE) -f $(COMPOSE_FILE) --env-file $(ENV_FILE)
+
+# Instance number list for dynamic rule generation
+INSTANCE_NUMS := $(shell seq 1 $(INSTANCES))
 
 # Service mappings
 SERVICES := db server client
@@ -59,7 +83,7 @@ stop-$(1): ## Stop $(1)
 	$(COMPOSE_CMD) stop $(CONTAINER_$(1))
 endef
 
-# Template to generate 3-instance rules
+# Template to generate N-instance rules
 define make-instance-rules
 logs-$(1)-inst$(2): ## Show logs from $(1) instance $(2)
 	$(COMPOSE_CMD) logs -f $(CONTAINER_$(1))-inst$(2)
@@ -74,38 +98,43 @@ stop-$(1)-inst$(2): ## Stop $(1) instance $(2)
 	$(COMPOSE_CMD) stop $(CONTAINER_$(1))-inst$(2)
 endef
 
-# Generate rules for single-instance mode
+# Generate per-service rules (single instance) or per-instance rules (multi)
+ifeq ($(INSTANCES),1)
 $(foreach service,$(SERVICES),$(eval $(call make-service-rules,$(service))))
-
-# Generate rules for 3-instance mode
-$(foreach service,$(SERVICES),$(foreach inst,1 2 3,$(eval $(call make-instance-rules,$(service),$(inst)))))
+else
+$(foreach service,$(SERVICES),$(foreach inst,$(INSTANCE_NUMS),$(eval $(call make-instance-rules,$(service),$(inst)))))
+endif
 
 help: ## Show this help message
-	@echo "Django Workload Docker Commands (3-Container Setup)"
+	@echo "Django Workload Docker Commands"
 	@echo "Architecture: $(ARCH)"
 	@echo ""
-	@echo "Configuration Variables:"
-	@echo "  CORES=$(CORES) (options: single-core, 16-core)"
-	@echo "  INSTANCES=$(INSTANCES) (options: 1, 3)"
-	@echo "  Using: $(COMPOSE_FILE) with $(ENV_FILE)"
+	@echo "Configuration Variables (pass on command line):"
+	@echo "  CORES     = $(CORES)  (number of cores per instance; 1 = single-core)"
+	@echo "  INSTANCES = $(INSTANCES)  (number of parallel instances)"
+	@echo "  Using:    $(COMPOSE_FILE)  +  $(ENV_FILE)"
 	@echo ""
 	@echo "Usage examples:"
-	@echo "  make up                                              # Use defaults (single-core, 1 instance)"
-	@echo "  make CORES=16-core up               # 16-core, single instance"
-	@echo "  make CORES=16-core INSTANCES=3 up      # 16-core, 3 instances"
-	@echo "  make CORES=single-core INSTANCES=1 up  # Single-core, 1 instance"
+	@echo "  make up                            # defaults: 1 core, 1 instance"
+	@echo "  make CORES=16 up                   # 16-core, 1 instance"
+	@echo "  make CORES=16 INSTANCES=3 up       # 16-core, 3 instances"
+	@echo "  make CORES=32 INSTANCES=4 up       # 32-core, 4 instances (auto-generated)"
+	@echo ""
+	@echo "  Missing compose/env files are auto-generated from:"
+	@echo "    generate_docker_compose.py  and  generate_env.py"
 	@echo ""
 	@grep -E '^[a-zA-Z_-]+:.*?## .*$$' $(MAKEFILE_LIST) | sort | awk 'BEGIN {FS = ":.*?## "}; {printf "  \033[36m%-20s\033[0m %s\n", $$1, $$2}'
 	@echo ""
 
 config: ## Show current configuration
 	@echo "Current Configuration:"
-	@echo "  CORES       = $(CORES)"
-	@echo "  INSTANCES   = $(INSTANCES)"
-	@echo "  CONFIG      = $(CONFIG)"
+	@echo "  CORES        = $(CORES)"
+	@echo "  CORES_LABEL  = $(CORES_LABEL)"
+	@echo "  INSTANCES    = $(INSTANCES)"
+	@echo "  CONFIG       = $(CONFIG)"
 	@echo "  COMPOSE_FILE = $(COMPOSE_FILE)"
-	@echo "  ENV_FILE    = $(ENV_FILE)"
-	@echo "  ARCH        = $(ARCH)"
+	@echo "  ENV_FILE     = $(ENV_FILE)"
+	@echo "  ARCH         = $(ARCH)"
 	@echo ""
 	@if [ -f "$(COMPOSE_FILE)" ]; then \
 		echo "✓ Docker Compose file exists: $(COMPOSE_FILE)"; \
@@ -206,10 +235,12 @@ clean-all: clean ## Stop containers, remove volumes and images
 	            docker.io/akrishnaams/dcperf-djangobench-client-$(ARCH):latest || true
 
 setup: ## Create required directories
-ifeq ($(INSTANCES),3)
-	mkdir -p results/inst1 results/inst2 results/inst3 logs/cassandra-inst1 logs/cassandra-inst2 logs/cassandra-inst3 logs/django-inst1 logs/django-inst2 logs/django-inst3
-else
+ifeq ($(INSTANCES),1)
 	mkdir -p results logs/cassandra logs/django
+else
+	@mkdir -p $(foreach i,$(INSTANCE_NUMS),results/inst$(i)) \
+	          $(foreach i,$(INSTANCE_NUMS),logs/cassandra-inst$(i)) \
+	          $(foreach i,$(INSTANCE_NUMS),logs/django-inst$(i))
 endif
 
 init: setup ## Initialize environment (create directories)

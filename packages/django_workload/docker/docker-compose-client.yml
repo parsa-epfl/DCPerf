@@ -1,0 +1,24 @@
+services:
+  siege-client:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: client
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-client-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-siege-client
+    hostname: siege-client
+    environment:
+      # Point to the server machine IP (set this to the server machine's IP address)
+      SERVER_ADDR: "${SERVER_IP:-localhost}"
+      ITERATIONS: ${ITERATIONS:-}
+      REPS: ${REPS:-}
+      NUM_CLIENT_THREADS: ${NUM_CLIENT_THREADS:-}
+    volumes:
+      - ./results:/DCPerf/benchmarks/django_workload/results
+    cpuset: ${CLIENT_NODE_CPUS}
+    privileged: true
+    # Optional: expose on host network for better performance
+    network_mode: "host"

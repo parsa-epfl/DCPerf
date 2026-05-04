@@ -1,0 +1,69 @@
+services:
+  cassandra-db:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: db
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-cassandra-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-cassandra-db
+    hostname: cassandra-db
+    networks:
+      - django-network
+    environment:
+      BIND_IP: ""
+    ports:
+      - "9042:9042"  # CQL native transport - accessible from client machine
+      - "7000:7000"  # Inter-node cluster
+      - "7199:7199"  # JMX monitoring
+    volumes:
+      - ./logs/cassandra:/DCPerf/benchmarks/django_workload/cassandra_logs
+    healthcheck:
+      test: ["CMD-SHELL", "lsof -i -P -n | grep 9042 || exit 1"]
+      interval: 30s
+      timeout: 20s
+      retries: 10
+      start_period: 120s
+    cpuset: ${SERVER_NODE_CPUS}
+    privileged: true
+
+  django-server:
+    build:
+      context: ../../..
+      dockerfile: packages/django_workload/docker/Dockerfile.qflex
+      target: server
+      args:
+        ARCH: ${ARCH:-arm64}
+    image: docker.io/akrishnaams/dcperf-djangobench-server-${ARCH:-arm64}:latest
+    pid: "host"
+    container_name: django-server
+    hostname: django-server
+    networks:
+      - django-network
+    depends_on:
+      cassandra-db:
+        condition: service_healthy
+    environment:
+      DB_ADDR: "cassandra-db"
+      NUM_DJANGO_THREADS: ${NUM_DJANGO_THREADS:-}
+    ports:
+      - "8000:8000"  # Django/uWSGI - accessible from client machine
+    volumes:
+      - ./logs/django:/DCPerf/benchmarks/django_workload/logs
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://[::1]:8000/feed_timeline"]
+      interval: 30s
+      timeout: 20s
+      retries: 5
+      start_period: 60s
+    cpuset: ${SERVER_NODE_CPUS}
+    privileged: true
+
+networks:
+  django-network:
+    driver: bridge
+    ipam:
+      config:
+        - subnet: 172.20.0.0/16
